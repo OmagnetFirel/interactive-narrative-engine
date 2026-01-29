@@ -1,0 +1,242 @@
+Interactive Narrative Engine
+Motor de narrativa interativa open source para streaming de vídeo, focado em narrativas ramificadas no estilo “Bandersnatch” com editor visual, API de processamento e player HTML5 interativo.
+​
+
+📌 Visão Geral
+Este projeto é organizado em um monorepo com quatro componentes principais:
+​
+
+editor: editor visual de grafo (React + React Flow/@xyflow)
+
+api: backend para CRUD de projetos e processamento de vídeo (Node.js + FFmpeg)
+
+player: player HTML5 para consumir o grafo e reproduzir o HLS
+
+shared: tipos e utilitários compartilhados entre os pacotes
+
+✅ Checklist de Início
+Antes de começar, garanta que:
+
+ Node.js 20+ instalado
+
+ PNPM instalado globalmente
+
+ Repositório Git criado
+
+ Package shared compilando (tipos em comum)
+
+ Editor renderizando React Flow/@xyflow
+
+ API respondendo em /health
+
+ Player carregando um stream HLS de teste
+
+ Todos os serviços conseguem rodar em paralelo com pnpm dev
+
+Esses itens garantem que a base mínima de desenvolvimento está funcional (frontend, backend e player).
+​
+
+🗂 Estrutura de Pastas (Resumo)
+text
+interactive-narrative-engine/
+├── packages/
+│   ├── editor/      # Editor visual de grafo
+│   ├── api/         # Backend API (CRUD + FFmpeg)
+│   ├── player/      # Player HTML5 (HLS + overlay de escolhas)
+│   └── shared/      # Tipos e utilitários compartilhados
+├── docs/            # Documentação (arquitetura, schema do grafo)
+├── infrastructure/  # Docker, Nginx, banco
+└── scripts/         # Scripts auxiliares (setup, generate-hls, etc.)
+🧭 Roadmap de Desenvolvimento
+🕒 Semana 1–2: Editor Visual
+Foco: deixar o editor usável para modelar histórias simples com nós e conexões.
+​
+
+1. Nós customizados (packages/editor/src/components/Canvas/CustomNode.tsx)
+Criar três tipos básicos de nó:
+
+Nó de vídeo
+
+Exibe título e uma thumbnail (quando disponível)
+
+Guarda videoUrl, duration, descrição etc.
+
+Nó de escolha
+
+Representa um ponto onde o usuário escolhe o próximo caminho
+
+Pode armazenar texto da escolha, condições, etc.
+
+Nó de fim
+
+Marca finais possíveis da narrativa
+
+Visualmente diferenciado (cor/borda) para facilitar leitura do grafo
+
+Esses tipos correspondem ao modelo de grafo descrito no projeto (nodes com tipos e metadados).
+​
+
+2. Painel de propriedades
+Criar um painel lateral (por exemplo, Sidebar/NodeProperties.tsx) para:
+
+Editar título e descrição do nó
+
+Associar ou alterar URL / upload de vídeo (para nós de vídeo)
+
+Configurar timeout de escolha e comportamento default (para nós de escolha)
+
+Isso aproxima a ferramenta do fluxo real de autoria, permitindo refinar os metadados de cada cena.
+​
+
+3. Validação básica do grafo
+Adicionar validações mínimas (utilidades em utils/validation.ts ou no shared):
+
+Detectar nós órfãos (sem arestas de entrada ou saída, quando não deveriam ser isolados)
+
+Verificar se existe nó inicial (por exemplo, um único nó marcado como start ou input)
+
+Essas validações são parte dos diferenciais do projeto e ajudam o autor a não gerar grafos inválidos.
+​
+
+🕒 Semana 3–4: API e Processamento
+Foco: persistir projetos e processar vídeos para HLS multi-bitrate.
+​
+
+1. CRUD de projetos
+Na API (packages/api):
+
+Endpoints para criar, listar, atualizar e remover projetos
+
+Salvar/carregar grafos em JSON:
+
+Inicialmente, pode ser em arquivos locais (ex.: diretório data/)
+
+Evoluir para PostgreSQL ou SQLite conforme o cronograma
+
+O payload deve refletir o InteractiveGraph definido em shared, garantindo contrato único entre editor, API e player.
+​
+
+2. Integração com FFmpeg (HLS)
+Configurar um serviço (ex.: services/ffmpegService.ts) para:
+
+Receber caminho/stream de vídeo de entrada
+
+Transcodificar para HLS com múltiplas resoluções (360p, 720p, 1080p)
+
+Exemplo de comando base para HLS:
+
+bash
+ffmpeg -i input.mp4 \
+  -c:v libx264 -c:a aac \
+  -hls_time 10 \
+  -hls_playlist_type vod \
+  -hls_segment_filename "output_%03d.ts" \
+  output.m3u8
+Esse pipeline alinha o projeto com as boas práticas de HLS descritas na documentação técnica utilizada no TCC (RFC 8216, guias de FFmpeg para HLS).
+​
+
+3. Endpoint de upload de vídeo
+Na API:
+
+Endpoint POST /api/videos para:
+
+Receber o arquivo (multipart/form-data)
+
+Salvar temporariamente
+
+Rodar FFmpeg para gerar HLS e segmentos
+
+Retornar:
+
+URL do .m3u8
+
+Resoluções disponíveis
+
+Metadados (duração, tamanho, etc.)
+
+O editor deve então consumir esse endpoint para associar vídeos aos nós de tipo video.
+​
+
+🕒 Semana 5–6: Player Interativo
+Foco: leitura do grafo exportado e experiência interativa no navegador.
+​
+
+1. Carregar grafo exportado
+No player:
+
+Receber um JSON de grafo (via URL, query param ou embed)
+
+Fazer parse do JSON para a estrutura InteractiveGraph
+
+Identificar o nó inicial (ex.: tipo start ou input) e começar por ele
+
+Isso garante que o player interpreta o mesmo formato que o editor exporta, centralizando o modelo no shared.
+​
+
+2. Navegação por escolhas
+Implementar:
+
+Overlay de escolhas:
+
+Componente que aparece em momentos específicos (por exemplo, nos últimos X segundos de um vídeo)
+
+Botões que representam as opções ligadas pelas edges saindo do nó atual
+
+Troca de vídeo ao clicar:
+
+Ao clicar em uma escolha, o player:
+
+Atualiza o nó corrente
+
+Carrega o próximo fluxo HLS correspondente
+
+Atualiza histórico de navegação (para analytics)
+
+Gerenciamento de estado da sessão:
+
+Estado em memória (ou localStorage) com:
+
+Nó atual
+
+Caminho percorrido
+
+Variáveis de sessão (futuro para lógica condicional)
+
+Essa lógica implementa, na prática, o grafo de narrativa interativa que o editor modela.
+​
+
+3. Prefetching (otimização)
+Adicionar um serviço de prefetch:
+
+Identificar próximos nós prováveis a partir do grafo
+
+Pré-carregar segmentos HLS dos caminhos mais utilizados, respeitando limites de banda
+
+Melhorar a experiência em conexões lentas, reduzindo rebuffering após cada escolha
+
+O prefetching é um dos diferenciais técnicos previstos no projeto para controlar banda e latência em cenários reais de streaming.
+​
+
+🧪 Fluxo de Desenvolvimento Recomendado
+Configurar ambiente e monorepo
+
+Node 20+, PNPM, repositório Git, pnpm-workspace, etc.
+​
+
+Garantir que o shared compila
+
+Tipos do grafo, interfaces de validação e utilitários básicos
+
+Focar primeiro no editor (Semana 1–2)
+
+Assim você consegue mostrar algo visualmente rápido para professor/orientador
+
+Em seguida, API e processamento (Semana 3–4)
+
+Persistência em JSON + pipeline FFmpeg simples já é suficiente para um MVP
+
+Por fim, o player interativo (Semana 5–6)
+
+Começar com navegação simples e depois adicionar prefetching e analytics
+
+Esse roadmap está alinhado com o path de estudo e de implementação descrito no documento de projeto do TCC, respeitando a ordem de complexidade e dependências entre componentes.

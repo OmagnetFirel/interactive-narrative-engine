@@ -1,0 +1,890 @@
+* {
+  margin: 0;
+  padding: 0;
+  box-sizing: border-box;
+}
+
+body {
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", "Netflix Sans",
+    "Helvetica Neue", Helvetica, Arial, sans-serif;
+  background: #000;
+  min-height: 100vh;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: white;
+}
+
+#app {
+  width: 100%;
+  max-width: 100vw;
+}
+
+/* Panel de Seleção */
+.panel {
+  max-width: 500px;
+  margin: 0 auto;
+  background: rgba(0, 0, 0, 0.8);
+  border-radius: 8px;
+  padding: 40px;
+  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.5);
+  text-align: center;
+}
+
+.panel h2 {
+  margin-bottom: 24px;
+  color: #fff;
+  font-size: 28px;
+  font-weight: 600;
+}
+
+.panel select {
+  width: 100%;
+  padding: 14px;
+  font-size: 16px;
+  background: #333;
+  color: white;
+  border: 1px solid #555;
+  border-radius: 4px;
+  margin-bottom: 20px;
+  cursor: pointer;
+}
+
+.panel select:focus {
+  outline: none;
+  border-color: #e50914;
+}
+
+.panel button {
+  background: #e50914;
+  color: white;
+  border: none;
+  padding: 14px 32px;
+  font-size: 16px;
+  font-weight: 600;
+  border-radius: 4px;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.panel button:hover {
+  background: #f40612;
+}
+
+/* Player Container */
+#player-container {
+  width: 100vw;
+  height: 100vh;
+  background: #000;
+  position: relative;
+}
+
+#video-wrapper {
+  position: relative;
+  width: 100%;
+  height: 100%;
+  background: #000;
+  overflow: hidden;
+}
+
+#video-player {
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+  display: block;
+  opacity: 1;
+  transition: opacity 0.4s ease-in-out; /* ✅ Transição suave */
+}
+
+/* ✅ NOVO: Estado de fade */
+#video-player.fading-out {
+  opacity: 0;
+}
+
+#video-player.fading-in {
+  animation: fadeIn 0.4s ease-in-out forwards;
+}
+
+@keyframes fadeIn {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
+/* Overlay de Escolhas */
+/* ===== OVERLAY DE ESCOLHAS (Estilo Bandersnatch) ===== */
+#choices-overlay {
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 80px; /* ✅ Acima dos controles */
+  top: auto; /* ✅ Remove centralização vertical */
+  background: transparent; /* ✅ Sem fundo escuro */
+  display: flex;
+  align-items: flex-end; /* ✅ Alinha na parte inferior */
+  justify-content: center;
+  z-index: 100;
+  padding: 0 40px 20px;
+  pointer-events: none; /* ✅ Permite clicar no vídeo */
+}
+
+#choices-overlay.hidden {
+  display: none;
+}
+
+.choices-container {
+  width: 100%;
+  max-width: 900px;
+  pointer-events: all; /* ✅ Apenas os botões são clicáveis */
+}
+
+#choices-title {
+  display: none; /* ✅ Sem título como no Bandersnatch */
+}
+
+#choices-buttons {
+  display: flex;
+  gap: 20px;
+  justify-content: center;
+  flex-wrap: wrap;
+}
+
+/* ✅ BOTÕES ESTILO BANDERSNATCH */
+.choice-button {
+  background: rgba(0, 0, 0, 0.85);
+  backdrop-filter: blur(10px);
+  color: white;
+  border: 2px solid rgba(255, 255, 255, 0.4);
+  padding: 16px 40px;
+  font-size: 18px;
+  font-weight: 700;
+  font-family: "Netflix Sans", -apple-system, sans-serif;
+  border-radius: 4px;
+  cursor: pointer;
+  transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+  text-shadow: 0 2px 4px rgba(0, 0, 0, 0.8);
+  text-transform: uppercase;
+  letter-spacing: 1px;
+  position: relative;
+  overflow: hidden;
+  min-width: 200px;
+}
+
+.choice-button::before {
+  content: "";
+  position: absolute;
+  top: 0;
+  left: -100%;
+  width: 100%;
+  height: 100%;
+  background: linear-gradient(
+    90deg,
+    transparent,
+    rgba(255, 255, 255, 0.2),
+    transparent
+  );
+  transition: left 0.5s;
+}
+
+.choice-button:hover::before {
+  left: 100%;
+}
+
+.choice-button:hover {
+  background: rgba(229, 9, 20, 0.95);
+  border-color: #e50914;
+  transform: translateY(-2px);
+  box-shadow: 0 8px 20px rgba(229, 9, 20, 0.4);
+}
+
+.choice-button:active {
+  transform: translateY(0);
+}
+
+/* Timeout Bar (abaixo dos botões) */
+#timeout-bar {
+  margin-top: 16px;
+  background: rgba(255, 255, 255, 0.2);
+  height: 3px;
+  border-radius: 2px;
+  overflow: hidden;
+}
+
+#timeout-bar.hidden {
+  display: none;
+}
+
+#timeout-progress {
+  height: 100%;
+  background: #e50914;
+  width: 100%;
+  transition: width linear;
+  box-shadow: 0 0 10px rgba(229, 9, 20, 0.8);
+}
+
+/* ===== CONTROLES (Garantir que ficam abaixo das escolhas) ===== */
+#custom-controls {
+  position: absolute;
+  bottom: 0;
+  left: 0;
+  right: 0;
+  background: linear-gradient(
+    to top,
+    rgba(0, 0, 0, 0.9) 0%,
+    rgba(0, 0, 0, 0.7) 50%,
+    transparent 100%
+  );
+  padding: 60px 24px 16px;
+  z-index: 50; /* ✅ Abaixo das escolhas (z-index: 100) */
+  opacity: 0;
+  transition: opacity 0.3s ease;
+  pointer-events: none;
+}
+
+#video-wrapper:hover #custom-controls,
+#custom-controls.always-visible {
+  opacity: 1;
+  pointer-events: all;
+}
+
+/* ===== RESPONSIVO ===== */
+@media (max-width: 768px) {
+  #choices-overlay {
+    bottom: 100px;
+    padding: 0 20px 20px;
+  }
+
+  #choices-buttons {
+    flex-direction: column;
+    gap: 12px;
+  }
+
+  .choice-button {
+    padding: 14px 28px;
+    font-size: 16px;
+    min-width: 180px;
+  }
+}
+
+/* ===== ANIMAÇÃO DE ENTRADA DAS ESCOLHAS ===== */
+@keyframes slideUpFade {
+  from {
+    opacity: 0;
+    transform: translateY(30px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.choice-button {
+  animation: slideUpFade 0.4s ease-out forwards;
+}
+
+.choice-button:nth-child(1) {
+  animation-delay: 0s;
+}
+
+.choice-button:nth-child(2) {
+  animation-delay: 0.1s;
+}
+
+.choice-button:nth-child(3) {
+  animation-delay: 0.2s;
+}
+
+.choice-button:nth-child(4) {
+  animation-delay: 0.3s;
+}
+
+/* Timeout Bar */
+#timeout-bar {
+  margin-top: 24px;
+  background: rgba(255, 255, 255, 0.2);
+  height: 4px;
+  border-radius: 2px;
+  overflow: hidden;
+}
+
+#timeout-bar.hidden {
+  display: none;
+}
+
+#timeout-progress {
+  height: 100%;
+  background: #e50914;
+  width: 100%;
+  transition: width linear;
+}
+
+/* Overlay de Final */
+#end-overlay {
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: rgba(0, 0, 0, 0.95);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 100;
+}
+
+#end-overlay.hidden {
+  display: none;
+}
+
+.end-container {
+  text-align: center;
+  color: white;
+  max-width: 600px;
+  padding: 40px;
+}
+
+#end-icon {
+  font-size: 100px;
+  margin-bottom: 24px;
+  filter: drop-shadow(0 4px 12px rgba(0, 0, 0, 0.5));
+}
+
+#end-title {
+  font-size: 48px;
+  font-weight: 700;
+  margin-bottom: 16px;
+  text-shadow: 0 2px 8px rgba(0, 0, 0, 0.8);
+}
+
+#end-message {
+  font-size: 20px;
+  line-height: 1.5;
+  margin-bottom: 32px;
+  opacity: 0.9;
+  color: rgba(255, 255, 255, 0.8);
+}
+
+#restart-button {
+  background: #e50914;
+  color: white;
+  border: none;
+  padding: 16px 40px;
+  font-size: 18px;
+  font-weight: 700;
+  border-radius: 4px;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+#restart-button:hover {
+  background: #f40612;
+  transform: scale(1.05);
+}
+
+/* ===== CONTROLES CUSTOMIZADOS (Estilo Netflix) ===== */
+#custom-controls {
+  position: absolute;
+  bottom: 0;
+  left: 0;
+  right: 0;
+  background: linear-gradient(
+    to top,
+    rgba(0, 0, 0, 0.9) 0%,
+    rgba(0, 0, 0, 0.7) 50%,
+    transparent 100%
+  );
+  padding: 60px 24px 16px;
+  z-index: 50;
+  opacity: 0;
+  transition: opacity 0.3s ease;
+  pointer-events: none;
+}
+
+#video-wrapper:hover #custom-controls,
+#custom-controls.always-visible {
+  opacity: 1;
+  pointer-events: all;
+}
+
+/* Progress Container */
+#progress-container {
+  margin-bottom: 12px;
+}
+
+/* Progress Bar */
+#progress-bar {
+  position: relative;
+  width: 100%;
+  height: 4px;
+  background: rgba(255, 255, 255, 0.3);
+  border-radius: 2px;
+  cursor: pointer;
+  margin-bottom: 8px;
+  transition: height 0.2s;
+}
+
+#progress-bar:hover {
+  height: 6px;
+}
+
+#progress-filled {
+  position: absolute;
+  top: 0;
+  left: 0;
+  height: 100%;
+  background: #e50914;
+  border-radius: 2px;
+  width: 0%;
+  transition: width 0.1s linear;
+}
+
+#progress-handle {
+  position: absolute;
+  top: 50%;
+  transform: translate(-50%, -50%) scale(0);
+  width: 16px;
+  height: 16px;
+  background: #e50914;
+  border: 2px solid white;
+  border-radius: 50%;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.5);
+  left: 0%;
+  transition: transform 0.2s;
+  pointer-events: none;
+}
+
+#progress-bar:hover #progress-handle {
+  transform: translate(-50%, -50%) scale(1);
+}
+
+/* Time Display */
+#time-display {
+  display: flex;
+  gap: 6px;
+  font-size: 14px;
+  color: rgba(255, 255, 255, 0.9);
+  font-family: "Netflix Sans", "Helvetica Neue", monospace;
+  font-weight: 500;
+  text-shadow: 0 1px 2px rgba(0, 0, 0, 0.8);
+}
+
+#separator {
+  color: rgba(255, 255, 255, 0.5);
+}
+
+/* Controls Buttons */
+#controls-buttons {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.control-btn {
+  background: none;
+  border: none;
+  color: white;
+  font-size: 28px;
+  cursor: pointer;
+  padding: 8px;
+  opacity: 0.9;
+  transition: all 0.2s;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  filter: drop-shadow(0 1px 2px rgba(0, 0, 0, 0.8));
+}
+
+.control-btn:hover {
+  opacity: 1;
+  transform: scale(1.1);
+}
+
+#play-pause-btn {
+  font-size: 32px;
+}
+
+/* Volume Slider */
+#volume-slider {
+  width: 100px;
+  height: 4px;
+  cursor: pointer;
+  -webkit-appearance: none;
+  appearance: none;
+  background: rgba(255, 255, 255, 0.3);
+  border-radius: 2px;
+  outline: none;
+  transition: background 0.2s;
+}
+
+#volume-slider:hover {
+  background: rgba(255, 255, 255, 0.4);
+}
+
+#volume-slider::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  appearance: none;
+  width: 14px;
+  height: 14px;
+  background: white;
+  border-radius: 50%;
+  cursor: pointer;
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.5);
+  transition: transform 0.2s;
+}
+
+#volume-slider::-webkit-slider-thumb:hover {
+  transform: scale(1.2);
+}
+
+#volume-slider::-moz-range-thumb {
+  width: 14px;
+  height: 14px;
+  background: white;
+  border-radius: 50%;
+  cursor: pointer;
+  border: none;
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.5);
+}
+
+/* Debug Panel */
+#debug-panel {
+  position: absolute;
+  top: 16px;
+  left: 16px;
+  padding: 16px;
+  background: rgba(0, 0, 0, 0.85);
+  border-radius: 8px;
+  font-size: 12px;
+  backdrop-filter: blur(10px);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  z-index: 40;
+  max-width: 300px;
+}
+
+#debug-panel-dev {
+  position: absolute;
+  top: 16px;
+  padding: 16px;
+  background: rgba(0, 0, 0, 0.85);
+  border-radius: 8px;
+  font-size: 12px;
+  backdrop-filter: blur(10px);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  z-index: 40;
+  max-width: 300px;
+}
+
+.debug-item {
+  margin-bottom: 8px;
+  color: rgba(255, 255, 255, 0.7);
+  line-height: 1.4;
+}
+
+.debug-item strong {
+  color: white;
+  font-weight: 600;
+}
+
+#virtual-time {
+  font-family: monospace;
+  color: #e50914;
+  font-weight: 700;
+}
+
+/* Responsive */
+@media (max-width: 768px) {
+  #choices-title {
+    font-size: 24px;
+  }
+
+  .choice-button {
+    padding: 16px 24px;
+    font-size: 18px;
+  }
+
+  #end-title {
+    font-size: 36px;
+  }
+
+  #debug-panel {
+    font-size: 10px;
+    padding: 12px;
+  }
+
+  #volume-slider {
+    width: 60px;
+  }
+}
+
+/* Ocultar debug em fullscreen */
+#player-container:fullscreen #debug-panel {
+  display: none;
+}
+
+/* Fim do arquivo style.css */
+
+/* ===== VIDEO COM FADE ===== */
+#video-player {
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+  display: block;
+  opacity: 1;
+  transition: opacity 0.4s ease-in-out;
+}
+
+#video-player.fading-out {
+  opacity: 0;
+}
+
+#video-player.fading-in {
+  animation: fadeIn 0.4s ease-in-out forwards;
+}
+
+@keyframes fadeIn {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
+/* ===== ESCOLHAS NA PARTE INFERIOR (Estilo Bandersnatch) ===== */
+#choices-overlay {
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 80px; /* ✅ Acima dos controles */
+  top: auto;
+  background: transparent;
+  display: flex;
+  align-items: flex-end;
+  justify-content: center;
+  z-index: 100;
+  padding: 0 40px 20px;
+  pointer-events: none;
+}
+
+#choices-overlay.hidden {
+  display: none;
+}
+
+.choices-container {
+  width: 100%;
+  max-width: 900px;
+  pointer-events: all;
+}
+
+#choices-title {
+  display: none; /* ✅ Sem título */
+}
+
+#choices-buttons {
+  display: flex;
+  gap: 20px;
+  justify-content: center;
+  flex-wrap: wrap;
+}
+
+.choice-button {
+  background: rgba(0, 0, 0, 0.85);
+  backdrop-filter: blur(10px);
+  color: white;
+  border: 2px solid rgba(255, 255, 255, 0.4);
+  padding: 16px 40px;
+  font-size: 18px;
+  font-weight: 700;
+  font-family: "Netflix Sans", -apple-system, sans-serif;
+  border-radius: 4px;
+  cursor: pointer;
+  transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+  text-transform: uppercase;
+  letter-spacing: 1px;
+  min-width: 200px;
+  animation: slideUpFade 0.4s ease-out forwards;
+}
+
+.choice-button:hover {
+  background: rgba(229, 9, 20, 0.95);
+  border-color: #e50914;
+  transform: translateY(-2px);
+  box-shadow: 0 8px 20px rgba(229, 9, 20, 0.4);
+}
+
+@keyframes slideUpFade {
+  from {
+    opacity: 0;
+    transform: translateY(30px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.choice-button:nth-child(1) {
+  animation-delay: 0s;
+}
+.choice-button:nth-child(2) {
+  animation-delay: 0.1s;
+}
+.choice-button:nth-child(3) {
+  animation-delay: 0.2s;
+}
+.choice-button:nth-child(4) {
+  animation-delay: 0.3s;
+}
+
+/* Timeout Bar */
+#timeout-bar {
+  margin-top: 16px;
+  background: rgba(255, 255, 255, 0.2);
+  height: 3px;
+  border-radius: 2px;
+  overflow: hidden;
+}
+
+#timeout-progress {
+  height: 100%;
+  background: #e50914;
+  width: 100%;
+  transition: width linear;
+  box-shadow: 0 0 10px rgba(229, 9, 20, 0.8);
+}
+
+/* Controles abaixo das escolhas */
+#custom-controls {
+  z-index: 50; /* Abaixo das escolhas (100) */
+}
+
+/* ===== HEADER COM BOTÃO DE VOLTAR ===== */
+#player-header {
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  padding: 20px 24px;
+  background: linear-gradient(
+    to bottom,
+    rgba(0, 0, 0, 0.8) 0%,
+    rgba(0, 0, 0, 0.4) 50%,
+    transparent 100%
+  );
+  display: flex;
+  align-items: center;
+  gap: 20px;
+  z-index: 90;
+  opacity: 0;
+  transition: opacity 0.3s ease;
+  pointer-events: none;
+}
+
+#video-wrapper:hover #player-header,
+#player-header.always-visible {
+  opacity: 1;
+  pointer-events: all;
+}
+
+.back-btn {
+  background: rgba(0, 0, 0, 0.7);
+  backdrop-filter: blur(10px);
+  color: white;
+  border: 1px solid rgba(255, 255, 255, 0.3);
+  padding: 10px 20px;
+  font-size: 16px;
+  font-weight: 600;
+  border-radius: 4px;
+  cursor: pointer;
+  transition: all 0.2s;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.back-btn:hover {
+  background: rgba(229, 9, 20, 0.9);
+  border-color: #e50914;
+  transform: translateX(-4px);
+}
+
+#project-title {
+  font-size: 18px;
+  font-weight: 600;
+  color: white;
+  margin: 0;
+  text-shadow: 0 2px 4px rgba(0, 0, 0, 0.8);
+}
+
+/* ===== CONTROLE DE VELOCIDADE ===== */
+.speed-control {
+  position: relative;
+}
+
+#speed-btn {
+  font-size: 16px;
+  font-weight: 600;
+  padding: 6px 12px;
+  min-width: 50px;
+  background: rgba(255, 255, 255, 0.1);
+  border: 1px solid rgba(255, 255, 255, 0.3);
+  border-radius: 4px;
+}
+
+#speed-btn:hover {
+  background: rgba(255, 255, 255, 0.2);
+  border-color: rgba(255, 255, 255, 0.5);
+}
+
+.speed-menu {
+  position: absolute;
+  bottom: 100%;
+  left: 50%;
+  transform: translateX(-50%);
+  margin-bottom: 8px;
+  background: rgba(20, 20, 20, 0.95);
+  backdrop-filter: blur(10px);
+  border: 1px solid rgba(255, 255, 255, 0.2);
+  border-radius: 8px;
+  padding: 8px;
+  min-width: 120px;
+  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.5);
+}
+
+.speed-menu.hidden {
+  display: none;
+}
+
+.speed-option {
+  display: block;
+  width: 100%;
+  padding: 10px 16px;
+  background: transparent;
+  border: none;
+  color: rgba(255, 255, 255, 0.8);
+  font-size: 14px;
+  font-weight: 500;
+  text-align: left;
+  cursor: pointer;
+  border-radius: 4px;
+  transition: all 0.2s;
+}
+
+.speed-option:hover {
+  background: rgba(255, 255, 255, 0.1);
+  color: white;
+}
+
+.speed-option.active {
+  color: #e50914;
+  font-weight: 700;
+  background: rgba(229, 9, 20, 0.1);
+}
+
+.speed-option.active::after {
+  content: " ✓";
+  float: right;
+}
