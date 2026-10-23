@@ -6,10 +6,10 @@ RUN apk add --no-cache ffmpeg
 WORKDIR /app
 
 # Instalar pnpm
-RUN npm install -g pnpm
+RUN npm install -g pnpm@10.9.0
 
 # Copiar package files
-COPY package.json pnpm-lock.yaml pnpm-workspace.yaml ./
+COPY package.json pnpm-lock.yaml pnpm-workspace.yaml .npmrc ./
 COPY packages/shared/package.json ./packages/shared/
 COPY packages/api/package.json ./packages/api/
 

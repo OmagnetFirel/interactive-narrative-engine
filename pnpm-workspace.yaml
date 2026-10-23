@@ -1,2 +1,10 @@
 packages:
   - "packages/*"
+
+onlyBuiltDependencies:
+  - esbuild
+  - "@node-rs/argon2"
+
+allowBuilds:
+  esbuild: true
+  "@node-rs/argon2": true
