@@ -5,16 +5,14 @@
  * Uso: npx ts-node src/scripts/retranscode-all.ts
  */
 
+import 'dotenv/config';
 import { spawn } from 'child_process';
 import path from 'path';
 import fs from 'fs/promises';
-import { fileURLToPath } from 'url';
 import { ENCODING_PARAMS, FIXED_RESOLUTIONS, RESOLUTION_BANDWIDTH, RESOLUTION_DIMENSIONS, HLS_VERSION } from '../config/constants.js';
+import { uploadsRoot } from '../config/runtime.js';
 
-const __filename = fileURLToPath(import.meta.url);
-const __dirname = path.dirname(__filename);
-
-const HLS_DIR = path.join(__dirname, '../../uploads/hls');
+const HLS_DIR = path.join(uploadsRoot, 'hls');
 
 interface VideoInfo {
     id: string;

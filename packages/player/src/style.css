@@ -1,3 +1,24 @@
+/* =====================================================================
+   Identidade visual — branco quente, marrom, cobre e vermelho
+   ===================================================================== */
+:root {
+  --bg: #faf8f4;
+  --surface: #ffffff;
+  --surface-hover: #f3ebe3;
+  --ink: #3a2418;
+  --ink-soft: #5a3828;
+  --primary: #b87333;
+  --primary-deep: #9a5f2a;
+  --primary-hover: #d99a5b;
+  --secondary: #5a3828;
+  --accent: #d99a5b;
+  --danger: #d64a45;
+  --text: #241711;
+  --text-secondary: #6e5c4c;
+  --border: #e7d8ca;
+  --progress: #d64a45;
+}
+
 * {
   margin: 0;
   padding: 0;
@@ -5,14 +26,14 @@
 }
 
 body {
-  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", "Netflix Sans",
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI",
     "Helvetica Neue", Helvetica, Arial, sans-serif;
-  background: #000;
+  background: var(--bg);
   min-height: 100vh;
   display: flex;
   align-items: center;
   justify-content: center;
-  color: white;
+  color: var(--text);
 }
 
 #app {
@@ -24,51 +45,65 @@ body {
 .panel {
   max-width: 500px;
   margin: 0 auto;
-  background: rgba(0, 0, 0, 0.8);
-  border-radius: 8px;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 16px;
   padding: 40px;
-  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.5);
+  box-shadow: 0 10px 28px rgba(58, 36, 24, 0.08);
   text-align: center;
 }
 
 .panel h2 {
   margin-bottom: 24px;
-  color: #fff;
+  color: var(--text);
   font-size: 28px;
   font-weight: 600;
+}
+
+.landing-text {
+  color: var(--text-secondary);
+  font-size: 16px;
+  line-height: 1.6;
+}
+
+.panel-error h2 {
+  color: var(--danger);
 }
 
 .panel select {
   width: 100%;
   padding: 14px;
   font-size: 16px;
-  background: #333;
-  color: white;
-  border: 1px solid #555;
-  border-radius: 4px;
+  background: var(--surface);
+  color: var(--text);
+  border: 1px solid var(--border);
+  border-radius: 8px;
   margin-bottom: 20px;
   cursor: pointer;
 }
 
 .panel select:focus {
   outline: none;
-  border-color: #e50914;
+  border-color: var(--primary);
+  box-shadow: 0 0 0 3px rgba(184, 115, 51, 0.2);
 }
 
 .panel button {
-  background: #e50914;
-  color: white;
+  background: var(--primary-deep);
+  color: #ffffff;
   border: none;
   padding: 14px 32px;
   font-size: 16px;
   font-weight: 600;
-  border-radius: 4px;
+  border-radius: 8px;
   cursor: pointer;
-  transition: all 0.2s;
+  transition: background 0.2s, box-shadow 0.2s, transform 0.2s;
 }
 
 .panel button:hover {
-  background: #f40612;
+  background: var(--primary);
+  transform: translateY(-1px);
+  box-shadow: 0 8px 18px rgba(154, 95, 42, 0.28);
 }
 
 /* Player Container */
@@ -154,10 +189,9 @@ body {
 
 /* ✅ BOTÕES ESTILO BANDERSNATCH */
 .choice-button {
-  background: rgba(0, 0, 0, 0.85);
-  backdrop-filter: blur(10px);
-  color: white;
-  border: 2px solid rgba(255, 255, 255, 0.4);
+  background: rgba(58, 36, 24, 0.94);
+  color: #ffffff;
+  border: 2px solid rgba(184, 115, 51, 0.85);
   padding: 16px 40px;
   font-size: 18px;
   font-weight: 700;
@@ -194,10 +228,11 @@ body {
 }
 
 .choice-button:hover {
-  background: rgba(229, 9, 20, 0.95);
-  border-color: #e50914;
+  background: #5a3828;
+  border-color: var(--primary-hover);
+  color: #ffffff;
   transform: translateY(-2px);
-  box-shadow: 0 8px 20px rgba(229, 9, 20, 0.4);
+  box-shadow: 0 8px 20px rgba(58, 36, 24, 0.35);
 }
 
 .choice-button:active {
@@ -219,10 +254,9 @@ body {
 
 #timeout-progress {
   height: 100%;
-  background: #e50914;
+  background: var(--progress);
   width: 100%;
   transition: width linear;
-  box-shadow: 0 0 10px rgba(229, 9, 20, 0.8);
 }
 
 /* ===== CONTROLES (Garantir que ficam abaixo das escolhas) ===== */
@@ -233,8 +267,8 @@ body {
   right: 0;
   background: linear-gradient(
     to top,
-    rgba(0, 0, 0, 0.9) 0%,
-    rgba(0, 0, 0, 0.7) 50%,
+    rgba(58, 36, 24, 0.94) 0%,
+    rgba(58, 36, 24, 0.72) 48%,
     transparent 100%
   );
   padding: 60px 24px 16px;
@@ -316,7 +350,7 @@ body {
 
 #timeout-progress {
   height: 100%;
-  background: #e50914;
+  background: var(--progress);
   width: 100%;
   transition: width linear;
 }
@@ -328,7 +362,7 @@ body {
   left: 0;
   right: 0;
   bottom: 0;
-  background: rgba(0, 0, 0, 0.95);
+  background: rgba(36, 23, 17, 0.94);
   display: flex;
   align-items: center;
   justify-content: center;
@@ -368,20 +402,20 @@ body {
 }
 
 #restart-button {
-  background: #e50914;
-  color: white;
+  background: var(--primary-deep);
+  color: #ffffff;
   border: none;
   padding: 16px 40px;
   font-size: 18px;
   font-weight: 700;
-  border-radius: 4px;
+  border-radius: 8px;
   cursor: pointer;
-  transition: all 0.2s;
+  transition: background 0.2s, transform 0.2s;
 }
 
 #restart-button:hover {
-  background: #f40612;
-  transform: scale(1.05);
+  background: var(--primary);
+  transform: scale(1.03);
 }
 
 /* ===== CONTROLES CUSTOMIZADOS (Estilo Netflix) ===== */
@@ -392,8 +426,8 @@ body {
   right: 0;
   background: linear-gradient(
     to top,
-    rgba(0, 0, 0, 0.9) 0%,
-    rgba(0, 0, 0, 0.7) 50%,
+    rgba(58, 36, 24, 0.94) 0%,
+    rgba(58, 36, 24, 0.72) 48%,
     transparent 100%
   );
   padding: 60px 24px 16px;
@@ -414,20 +448,34 @@ body {
   margin-bottom: 12px;
 }
 
-/* Progress Bar */
+/* Progress Bar — estilo live (somente leitura) */
 #progress-bar {
   position: relative;
   width: 100%;
   height: 4px;
-  background: rgba(255, 255, 255, 0.3);
+  background: rgba(255, 255, 255, 0.15);
   border-radius: 2px;
-  cursor: pointer;
   margin-bottom: 8px;
+  overflow: hidden;
+  pointer-events: none;
+  cursor: default;
   transition: height 0.2s;
 }
 
-#progress-bar:hover {
-  height: 6px;
+#custom-controls:hover #progress-bar,
+#custom-controls.always-visible #progress-bar {
+  height: 5px;
+}
+
+#progress-available {
+  position: absolute;
+  top: 0;
+  left: 0;
+  height: 100%;
+  width: 0%;
+  background: rgba(255, 255, 255, 0.22);
+  border-radius: 2px;
+  pointer-events: none;
 }
 
 #progress-filled {
@@ -435,28 +483,29 @@ body {
   top: 0;
   left: 0;
   height: 100%;
-  background: #e50914;
+  background: var(--progress);
   border-radius: 2px;
   width: 0%;
-  transition: width 0.1s linear;
+  pointer-events: none;
 }
 
 #progress-handle {
   position: absolute;
   top: 50%;
-  transform: translate(-50%, -50%) scale(0);
-  width: 16px;
-  height: 16px;
-  background: #e50914;
-  border: 2px solid white;
+  transform: translate(-50%, -50%) scale(0.85);
+  width: 12px;
+  height: 12px;
+  background: var(--progress);
+  border: 2px solid #ffffff;
   border-radius: 50%;
   box-shadow: 0 2px 8px rgba(0, 0, 0, 0.5);
   left: 0%;
-  transition: transform 0.2s;
   pointer-events: none;
+  transition: transform 0.15s ease;
 }
 
-#progress-bar:hover #progress-handle {
+#custom-controls:hover #progress-handle,
+#custom-controls.always-visible #progress-handle {
   transform: translate(-50%, -50%) scale(1);
 }
 
@@ -502,8 +551,68 @@ body {
   transform: scale(1.1);
 }
 
+/* ✅ Ícones SVG dos controles */
+.control-btn svg {
+  width: 24px;
+  height: 24px;
+  display: block;
+  fill: currentColor;
+}
+
+/* Botões com ícone + rótulo (qualidade / velocidade) */
+.control-btn.ctrl-with-label {
+  gap: 7px;
+  font-size: 14px;
+  font-weight: 600;
+  border-radius: 8px;
+}
+
+.control-btn.ctrl-with-label .ctrl-label {
+  font-size: 13px;
+  letter-spacing: 0.2px;
+  line-height: 1;
+}
+
+.control-btn.ctrl-with-label:hover {
+  transform: scale(1.04);
+  background: rgba(255, 255, 255, 0.08);
+}
+
 #play-pause-btn {
-  font-size: 32px;
+  width: 52px;
+  height: 52px;
+  padding: 0;
+  border-radius: 50%;
+  color: #ffffff;
+  background: var(--primary);
+  box-shadow: 0 6px 16px rgba(58, 36, 24, 0.35);
+  opacity: 1;
+  filter: none;
+}
+
+#play-pause-btn svg {
+  width: 24px;
+  height: 24px;
+  display: block;
+  fill: currentColor;
+}
+
+/* Compensar o "peso" visual do triângulo de play, centralizando-o melhor */
+#play-pause-btn.is-paused svg {
+  margin-left: 3px;
+}
+
+#play-pause-btn:hover {
+  opacity: 1;
+  transform: scale(1.06);
+  background: var(--primary-hover);
+  color: #3a2418;
+  box-shadow: 0 8px 18px rgba(58, 36, 24, 0.4);
+  filter: none;
+}
+
+#play-pause-btn:active {
+  transform: scale(0.96);
 }
 
 /* Volume Slider */
@@ -555,7 +664,7 @@ body {
   top: 16px;
   left: 16px;
   padding: 16px;
-  background: rgba(0, 0, 0, 0.85);
+  background: rgba(58, 36, 24, 0.92);
   border-radius: 8px;
   font-size: 12px;
   backdrop-filter: blur(10px);
@@ -568,7 +677,7 @@ body {
   position: absolute;
   top: 16px;
   padding: 16px;
-  background: rgba(0, 0, 0, 0.85);
+  background: rgba(58, 36, 24, 0.92);
   border-radius: 8px;
   font-size: 12px;
   backdrop-filter: blur(10px);
@@ -590,7 +699,7 @@ body {
 
 #virtual-time {
   font-family: monospace;
-  color: #e50914;
+  color: var(--primary-hover);
   font-weight: 700;
 }
 
@@ -691,10 +800,9 @@ body {
 }
 
 .choice-button {
-  background: rgba(0, 0, 0, 0.85);
-  backdrop-filter: blur(10px);
-  color: white;
-  border: 2px solid rgba(255, 255, 255, 0.4);
+  background: rgba(58, 36, 24, 0.94);
+  color: #ffffff;
+  border: 2px solid rgba(184, 115, 51, 0.85);
   padding: 16px 40px;
   font-size: 18px;
   font-weight: 700;
@@ -709,10 +817,11 @@ body {
 }
 
 .choice-button:hover {
-  background: rgba(229, 9, 20, 0.95);
-  border-color: #e50914;
+  background: #5a3828;
+  border-color: var(--primary-hover);
+  color: #ffffff;
   transform: translateY(-2px);
-  box-shadow: 0 8px 20px rgba(229, 9, 20, 0.4);
+  box-shadow: 0 8px 20px rgba(58, 36, 24, 0.35);
 }
 
 @keyframes slideUpFade {
@@ -750,10 +859,9 @@ body {
 
 #timeout-progress {
   height: 100%;
-  background: #e50914;
+  background: var(--progress);
   width: 100%;
   transition: width linear;
-  box-shadow: 0 0 10px rgba(229, 9, 20, 0.8);
 }
 
 /* Controles abaixo das escolhas */
@@ -761,7 +869,7 @@ body {
   z-index: 50; /* Abaixo das escolhas (100) */
 }
 
-/* ===== HEADER COM BOTÃO DE VOLTAR ===== */
+/* ===== HEADER — botão voltar (estilo Netflix/Globo) ===== */
 #player-header {
   position: absolute;
   top: 0;
@@ -770,53 +878,121 @@ body {
   padding: 20px 24px;
   background: linear-gradient(
     to bottom,
-    rgba(0, 0, 0, 0.8) 0%,
-    rgba(0, 0, 0, 0.4) 50%,
+    rgba(58, 36, 24, 0.82) 0%,
+    rgba(58, 36, 24, 0.35) 55%,
     transparent 100%
   );
   display: flex;
   align-items: center;
-  gap: 20px;
-  z-index: 90;
+  z-index: 95;
   opacity: 0;
   transition: opacity 0.3s ease;
   pointer-events: none;
 }
 
-#video-wrapper:hover #player-header,
-#player-header.always-visible {
+#player-header.visible {
   opacity: 1;
   pointer-events: all;
 }
 
-.back-btn {
-  background: rgba(0, 0, 0, 0.7);
-  backdrop-filter: blur(10px);
-  color: white;
-  border: 1px solid rgba(255, 255, 255, 0.3);
-  padding: 10px 20px;
-  font-size: 16px;
-  font-weight: 600;
-  border-radius: 4px;
-  cursor: pointer;
-  transition: all 0.2s;
+.back-btn-icon {
+  width: 44px;
+  height: 44px;
   display: flex;
   align-items: center;
-  gap: 8px;
+  justify-content: center;
+  background: rgba(58, 36, 24, 0.88);
+  color: #ffffff;
+  border: 1px solid rgba(184, 115, 51, 0.55);
+  border-radius: 50%;
+  cursor: pointer;
+  transition: background 0.2s, transform 0.2s, border-color 0.2s;
+  padding: 0;
 }
 
-.back-btn:hover {
-  background: rgba(229, 9, 20, 0.9);
-  border-color: #e50914;
-  transform: translateX(-4px);
+.back-btn-icon svg {
+  width: 22px;
+  height: 22px;
+  fill: currentColor;
 }
 
-#project-title {
-  font-size: 18px;
+.back-btn-icon:hover {
+  background: #5a3828;
+  border-color: var(--primary-hover);
+  transform: scale(1.05);
+}
+
+.back-btn-icon:active {
+  transform: scale(0.96);
+}
+
+/* ===== CONTROLE DE QUALIDADE ===== */
+.quality-control {
+  position: relative;
+}
+
+#quality-btn {
+  font-size: 16px;
   font-weight: 600;
+  padding: 6px 12px;
+  min-width: 50px;
+  background: rgba(255, 255, 255, 0.1);
+  border: 1px solid rgba(255, 255, 255, 0.3);
+  border-radius: 4px;
+}
+
+#quality-btn:hover {
+  background: rgba(255, 255, 255, 0.2);
+  border-color: rgba(255, 255, 255, 0.5);
+}
+
+.quality-menu {
+  position: absolute;
+  bottom: 100%;
+  left: 50%;
+  transform: translateX(-50%);
+  margin-bottom: 8px;
+  background: #3a2418;
+  border: 1px solid rgba(231, 216, 202, 0.22);
+  border-radius: 8px;
+  padding: 8px;
+  min-width: 120px;
+  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.5);
+}
+
+.quality-menu.hidden {
+  display: none;
+}
+
+.quality-option {
+  display: block;
+  width: 100%;
+  padding: 10px 16px;
+  background: transparent;
+  border: none;
+  color: rgba(255, 255, 255, 0.8);
+  font-size: 14px;
+  font-weight: 500;
+  text-align: left;
+  cursor: pointer;
+  border-radius: 4px;
+  transition: all 0.2s;
+}
+
+.quality-option:hover {
+  background: rgba(255, 255, 255, 0.1);
   color: white;
-  margin: 0;
-  text-shadow: 0 2px 4px rgba(0, 0, 0, 0.8);
+}
+
+.quality-option.active {
+  color: var(--primary-hover);
+  font-weight: 700;
+  background: rgba(184, 115, 51, 0.18);
+}
+
+.quality-option.active::after {
+  content: " ✓";
+  float: right;
 }
 
 /* ===== CONTROLE DE VELOCIDADE ===== */
@@ -845,9 +1021,8 @@ body {
   left: 50%;
   transform: translateX(-50%);
   margin-bottom: 8px;
-  background: rgba(20, 20, 20, 0.95);
-  backdrop-filter: blur(10px);
-  border: 1px solid rgba(255, 255, 255, 0.2);
+  background: #3a2418;
+  border: 1px solid rgba(231, 216, 202, 0.22);
   border-radius: 8px;
   padding: 8px;
   min-width: 120px;
@@ -879,9 +1054,9 @@ body {
 }
 
 .speed-option.active {
-  color: #e50914;
+  color: var(--primary-hover);
   font-weight: 700;
-  background: rgba(229, 9, 20, 0.1);
+  background: rgba(184, 115, 51, 0.18);
 }
 
 .speed-option.active::after {

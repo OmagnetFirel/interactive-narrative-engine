@@ -1,242 +1,459 @@
-Interactive Narrative Engine
-Motor de narrativa interativa open source para streaming de vídeo, focado em narrativas ramificadas no estilo “Bandersnatch” com editor visual, API de processamento e player HTML5 interativo.
-​
+# Interactive Narrative Engine
 
-📌 Visão Geral
+Motor de narrativa interativa **open source** para streaming de vídeo, focado em narrativas ramificadas no estilo "Bandersnatch" com editor visual, API de processamento e player HTML5 interativo.
+
+---
+
+## 📌 Visão Geral
+
 Este projeto é organizado em um monorepo com quatro componentes principais:
-​
 
-editor: editor visual de grafo (React + React Flow/@xyflow)
+| Componente | Descrição | Tecnologias |
+|------------|-----------|-------------|
+| **editor** | Editor visual de grafo | React + React Flow/@xyflow |
+| **api** | Backend para CRUD e processamento de vídeo | Node.js + Express + FFmpeg |
+| **player** | Player HTML5 interativo | TypeScript + hls.js |
+| **shared** | Tipos e utilitários compartilhados | TypeScript |
 
-api: backend para CRUD de projetos e processamento de vídeo (Node.js + FFmpeg)
+---
 
-player: player HTML5 para consumir o grafo e reproduzir o HLS
+## 🚀 Quick Start
 
-shared: tipos e utilitários compartilhados entre os pacotes
+### Pré-requisitos
 
-✅ Checklist de Início
-Antes de começar, garanta que:
+- Node.js 20+
+- PNPM 8+
+- FFmpeg (para processamento de vídeo)
+- Docker e Docker Compose (opcional, para deploy)
 
- Node.js 20+ instalado
+### Instalação (Desenvolvimento Local)
 
- PNPM instalado globalmente
+```bash
+# Clonar repositório
+git clone https://github.com/OmagnetFirel/interactive-narrative-engine.git
+cd interactive-narrative-engine
 
- Repositório Git criado
+# Instalar dependências
+pnpm install
 
- Package shared compilando (tipos em comum)
+# Compilar pacote shared
+pnpm --filter @ine/shared build
 
- Editor renderizando React Flow/@xyflow
+# Rodar todos os serviços em paralelo
+pnpm dev
+```
 
- API respondendo em /health
+### Serviços Disponíveis (Desenvolvimento)
 
- Player carregando um stream HLS de teste
+| Serviço | URL | Descrição |
+|---------|-----|-----------|
+| Editor | http://localhost:3000 | Interface para criar narrativas |
+| API | http://localhost:3001 | Backend REST |
+| Player | http://localhost:5173 | Player interativo |
 
- Todos os serviços conseguem rodar em paralelo com pnpm dev
+---
 
-Esses itens garantem que a base mínima de desenvolvimento está funcional (frontend, backend e player).
-​
+## 🐳 Docker
 
-🗂 Estrutura de Pastas (Resumo)
-text
+O projeto inclui configuração completa para deploy com Docker, incluindo banco de dados PostgreSQL, servidor de streaming Nginx e API de analytics de navegação do player (persistida no PostgreSQL e visualizada no dashboard React do editor).
+
+### Arquitetura Docker
+
+```
+┌─────────────────────────────────────────────────────────────────────┐
+│                        docker-compose.yml                           │
+├─────────────────────────────────────────────────────────────────────┤
+│                                                                     │
+│  ┌──────────┐  ┌──────────┐  ┌──────────┐  ┌──────────────────┐   │
+│  │  Editor  │  │  Player  │  │   API    │  │ Nginx Streaming  │   │
+│  │  :3000   │  │  :5173   │  │  :3001   │  │      :8080       │   │
+│  └────┬─────┘  └────┬─────┘  └────┬─────┘  └────────┬─────────┘   │
+│       │             │             │                  │             │
+│       └─────────────┴──────┬──────┴──────────────────┘             │
+│                            │                                        │
+│                    ┌───────┴───────┐                               │
+│                    │  PostgreSQL   │                               │
+│                    │    :5432      │                               │
+│                    └───────────────┘                               │
+│                                                                     │
+└─────────────────────────────────────────────────────────────────────┘
+```
+
+### Subir com Docker Compose
+
+```bash
+# Subir todos os serviços
+docker-compose up -d
+
+# Ver logs em tempo real
+docker-compose logs -f
+
+# Ver logs de um serviço específico
+docker-compose logs -f api
+
+# Parar todos os serviços
+docker-compose down
+
+# Parar e remover volumes (limpa dados)
+docker-compose down -v
+```
+
+### Serviços Docker
+
+| Serviço | URL | Credenciais | Descrição |
+|---------|-----|-------------|-----------|
+| Editor | http://localhost:3000 | - | Interface de criação de narrativas |
+| API | http://localhost:3001 | - | Backend REST + processamento FFmpeg |
+| Player | http://localhost:5173 | - | Player interativo HTML5 |
+| Streaming | http://localhost:8080 | - | Servidor Nginx para HLS |
+| PostgreSQL | localhost:5433 → 5432 no container | ine_user / ine_password | Banco (porta 5433 no host para não conflitar com Postgres local) |
+
+### Estrutura de Arquivos Docker
+
+```
+interactive-narrative-engine/
+├── docker-compose.yml          # Orquestração dos serviços
+├── .dockerignore               # Arquivos ignorados no build
+├── .env.example                # Template de variáveis de ambiente
+└── docker/
+    ├── Dockerfile.api          # Imagem da API (Node.js + FFmpeg)
+    ├── Dockerfile.editor       # Imagem do Editor (React + Nginx)
+    ├── Dockerfile.player       # Imagem do Player (TypeScript + Nginx)
+    ├── nginx-spa.conf          # Config Nginx para SPAs
+    ├── nginx-streaming.conf    # Config Nginx para HLS streaming
+    ├── init.sql                # Schema inicial do PostgreSQL
+    └── migrate-analytics-events-v2.sql  # Ajuste de schema para volumes já existentes
+```
+
+### Configuração de Ambiente
+
+Copie o arquivo `.env.example` para `.env` e ajuste conforme necessário:
+
+```bash
+cp .env.example .env
+```
+
+Variáveis disponíveis:
+
+```env
+# API Configuration
+NODE_ENV=production
+PORT=3001
+
+# Database
+DATABASE_URL=postgresql://ine_user:ine_password@postgres:5432/ine_database
+
+# Paths
+UPLOAD_DIR=./uploads
+OUTPUT_DIR=./output
+
+# CORS
+CORS_ORIGINS=http://localhost:3000,http://localhost:5173
+```
+
+---
+
+## 📊 Analytics (player + PostgreSQL + dashboard React)
+
+O player envia eventos de navegação para a API, que grava na tabela `analytics_events`. O **editor React** inclui um dashboard em:
+
+`/dashboard/analytics/:projectId`
+
+**Como acessar:** salve o projeto no editor e use o link “Abrir dashboard de analytics deste projeto”, ou abra manualmente `http://localhost:3000/dashboard/analytics/<ID>` com o mesmo `id` do grafo usado no player (ex.: id gerado ao salvar).
+
+**Pré-requisitos:** PostgreSQL com `DATABASE_URL` configurada na API (já definida no `docker-compose` para o serviço `api`). Em volumes criados antes desta versão, aplique `docker/migrate-analytics-events-v2.sql` se a inserção de eventos falhar por causa do tipo de `project_id`.
+
+### Endpoints REST
+
+| Método | Rota | Descrição |
+|--------|------|-----------|
+| POST | `/api/analytics/event` | Corpo JSON: `event_type`, `session_id`, `project_id`, `node_id`, `edge_id`, `choice_text`, `total_nodes_visited`, `timestamp` (ISO 8601). Sem Bearer obrigatório. |
+| GET | `/api/analytics/:projectId/summary` | Totais de sessões, eventos e média de `node_enter` por sessão |
+| GET | `/api/analytics/:projectId/nodes` | Visitas por `node_id` (eventos `node_enter`) |
+| GET | `/api/analytics/:projectId/dropoff` | Abandono estimado por nó (sessões com `session_end` cujo último evento antes do fim foi `node_enter` naquele nó) |
+
+### Eventos enviados pelo player
+
+| Evento | Quando |
+|--------|--------|
+| `node_enter` | Entrada em um nó (inclui transições com seek entre segmentos) |
+| `choice_made` | Clique (ou timeout) em uma opção de escolha |
+| `session_end` | Nó final, voltar à lista de projetos ou fechamento da página (`keepalive`) |
+
+---
+
+## 🗄️ Banco de Dados
+
+### Schema PostgreSQL
+
+O arquivo `docker/init.sql` cria as seguintes tabelas:
+
+#### Tabela `projects`
+```sql
+- id (UUID) - Identificador único
+- name (VARCHAR) - Nome do projeto
+- description (TEXT) - Descrição
+- graph (JSONB) - Grafo da narrativa (nós e edges)
+- metadata (JSONB) - Metadados adicionais
+- created_at, updated_at (TIMESTAMP)
+```
+
+#### Tabela `videos`
+```sql
+- id (UUID) - Identificador único
+- project_id (UUID) - Referência ao projeto
+- original_filename (VARCHAR) - Nome original do arquivo
+- storage_path (VARCHAR) - Caminho de armazenamento
+- hls_path (VARCHAR) - Caminho do HLS processado
+- thumbnail_path (VARCHAR) - Caminho da thumbnail
+- duration_seconds (DECIMAL) - Duração em segundos
+- status (VARCHAR) - pending, processing, ready, error
+- processing_progress (INTEGER) - Progresso 0-100
+```
+
+#### Tabela `analytics_sessions`
+```sql
+- id (UUID) - Identificador único
+- project_id (UUID) - Referência ao projeto
+- session_id (VARCHAR) - ID da sessão do usuário
+- user_agent (TEXT) - User agent do navegador
+- started_at, ended_at (TIMESTAMP)
+- total_duration_seconds (INTEGER)
+- completed (BOOLEAN)
+```
+
+#### Tabela `analytics_events`
+```sql
+- id (SERIAL) - Identificador único
+- session_id (VARCHAR) - UUID de sessão do player
+- project_id (VARCHAR) - Id do projeto (mesmo id do grafo na API em memória)
+- event_type (VARCHAR) - node_enter | choice_made | session_end
+- node_id, edge_id (VARCHAR) - Referências ao grafo
+- choice_label (TEXT) - Texto da escolha (API recebe como choice_text)
+- total_nodes_visited (INTEGER) - Contagem na sessão
+- client_event_timestamp (TIMESTAMPTZ) - Timestamp enviado pelo cliente
+- video_timestamp (DECIMAL) - Legado / opcional
+- created_at (TIMESTAMP)
+- metadata (JSONB)
+```
+
+### Views Pré-configuradas
+
+- `v_analytics_summary` - Resumo de eventos por projeto
+- `v_popular_choices` - Escolhas mais populares por nó
+- `v_navigation_flow` - Fluxo de navegação entre nós
+- `v_session_metrics` - Métricas agregadas de sessão
+- `v_most_visited_nodes` - Nós mais visitados
+
+---
+
+## 🗂 Estrutura de Pastas
+
+```
 interactive-narrative-engine/
 ├── packages/
-│   ├── editor/      # Editor visual de grafo
-│   ├── api/         # Backend API (CRUD + FFmpeg)
-│   ├── player/      # Player HTML5 (HLS + overlay de escolhas)
-│   └── shared/      # Tipos e utilitários compartilhados
-├── docs/            # Documentação (arquitetura, schema do grafo)
-├── infrastructure/  # Docker, Nginx, banco
-└── scripts/         # Scripts auxiliares (setup, generate-hls, etc.)
-🧭 Roadmap de Desenvolvimento
-🕒 Semana 1–2: Editor Visual
-Foco: deixar o editor usável para modelar histórias simples com nós e conexões.
-​
+│   ├── editor/              # Editor React
+│   │   ├── src/
+│   │   │   ├── components/  # Componentes React
+│   │   │   │   ├── Nodes/           # Nós customizados
+│   │   │   │   ├── PropertiesPanel/ # Painel de propriedades
+│   │   │   │   ├── Toolbar/         # Barra de ferramentas
+│   │   │   │   ├── ValidationPanel/ # Validação do grafo
+│   │   │   │   └── VideoUpload/     # Upload de vídeos
+│   │   │   ├── services/    # Comunicação com API
+│   │   │   ├── router.tsx   # createBrowserRouter (editor + analytics)
+│   │   │   ├── EditorWorkspace.tsx
+│   │   │   └── pages/       # Dashboard de analytics
+│   │   └── package.json
+│   │
+│   ├── api/                 # Backend Express
+│   │   ├── src/
+│   │   │   ├── config/      # Configurações (multer, constants)
+│   │   │   ├── services/    # Serviços (FFmpeg, HLS)
+│   │   │   └── index.ts     # Servidor + endpoints
+│   │   ├── uploads/         # Diretório de uploads
+│   │   │   ├── videos/      # Vídeos originais
+│   │   │   ├── hls/         # Vídeos processados (HLS)
+│   │   │   └── temp/        # Arquivos temporários
+│   │   └── package.json
+│   │
+│   ├── player/              # Player HTML5
+│   │   ├── src/
+│   │   │   ├── controllers/ # Controladores (choices, video)
+│   │   │   ├── core/        # Núcleo do player
+│   │   │   ├── services/    # Serviços (prefetch, analytics)
+│   │   │   ├── ui/          # Componentes de UI
+│   │   │   └── utils/       # Utilitários
+│   │   └── package.json
+│   │
+│   └── shared/              # Tipos compartilhados
+│       ├── src/
+│       │   ├── types/       # Interfaces TypeScript
+│       │   └── utils/       # Utilitários compartilhados
+│       └── package.json
+│
+├── docker/                  # Configurações Docker
+├── docker-compose.yml       # Orquestração
+├── pnpm-workspace.yaml      # Configuração monorepo
+└── package.json             # Scripts raiz
+```
+
+---
+
+## ✨ Funcionalidades Implementadas
+
+### 🎨 Editor Visual
+- ✅ Canvas interativo com drag-and-drop
+- ✅ Três tipos de nós: início, intermediário, fim
+- ✅ Conexões com labels customizáveis
+- ✅ Painel de propriedades lateral (nó, edge, projeto)
+- ✅ Upload de vídeos com progresso
+- ✅ Validação de grafo (nós órfãos, ciclos, etc.)
+- ✅ Associar vídeos aos nós
+- ✅ Configurar timeout de escolhas
+
+### 🔌 API Backend
+- ✅ CRUD completo de projetos
+- ✅ Upload e processamento de vídeos
+- ✅ Transcodificação FFmpeg para HLS (360p, 720p, 1080p)
+- ✅ Geração de thumbnails
+- ✅ Progresso de processamento em tempo real
+- ✅ Persistência em JSON (dev) / PostgreSQL (prod)
+
+### 🎬 Player Interativo
+- ✅ Navegação pelo grafo de narrativa
+- ✅ Overlay de escolhas com countdown
+- ✅ Prefetching inteligente dos próximos vídeos
+- ✅ Histórico de navegação
+- ✅ Integração com hls.js
+- ✅ Estados visuais (loading, error, ended)
+
+### 🐳 DevOps
+- ✅ Docker Compose completo
+- ✅ PostgreSQL com schema de analytics
+- ✅ Dashboard de analytics no editor (Recharts)
+- ✅ Nginx para streaming HLS
+- ✅ Multi-stage builds otimizados
+
+---
+
+## 🛠 Comandos Úteis
+
+### Desenvolvimento
+
+```bash
+# Rodar todos os serviços
+pnpm dev
+
+# Rodar serviço específico
+pnpm --filter @ine/editor dev
+pnpm --filter @ine/api dev
+pnpm --filter @ine/player dev
+
+# Buildar todos os pacotes
+pnpm build
+
+# Buildar pacote específico
+pnpm --filter @ine/shared build
+```
 
-1. Nós customizados (packages/editor/src/components/Canvas/CustomNode.tsx)
-Criar três tipos básicos de nó:
+### Docker
 
-Nó de vídeo
+```bash
+# Subir ambiente completo
+docker-compose up -d
 
-Exibe título e uma thumbnail (quando disponível)
+# Rebuild após alterações
+docker-compose up -d --build
 
-Guarda videoUrl, duration, descrição etc.
+# Ver logs
+docker-compose logs -f [serviço]
 
-Nó de escolha
+# Acessar container
+docker exec -it ine-api sh
+docker exec -it ine-postgres psql -U ine_user -d ine_database
 
-Representa um ponto onde o usuário escolhe o próximo caminho
+# Limpar tudo
+docker-compose down -v
+docker system prune -a
+```
 
-Pode armazenar texto da escolha, condições, etc.
+### Banco de Dados
 
-Nó de fim
+```bash
+# Conectar ao PostgreSQL
+docker exec -it ine-postgres psql -U ine_user -d ine_database
 
-Marca finais possíveis da narrativa
+# Queries úteis
+SELECT * FROM projects;
+SELECT * FROM analytics_events ORDER BY created_at DESC LIMIT 10;
+SELECT * FROM v_popular_choices;
+```
 
-Visualmente diferenciado (cor/borda) para facilitar leitura do grafo
+---
 
-Esses tipos correspondem ao modelo de grafo descrito no projeto (nodes com tipos e metadados).
-​
+## 🐛 Troubleshooting
 
-2. Painel de propriedades
-Criar um painel lateral (por exemplo, Sidebar/NodeProperties.tsx) para:
+### Docker não sobe
 
-Editar título e descrição do nó
+**Problema:** Erro ao subir containers
+**Solução:**
+```bash
+# Verificar se Docker está rodando
+docker info
 
-Associar ou alterar URL / upload de vídeo (para nós de vídeo)
+# Limpar e tentar novamente
+docker-compose down -v
+docker system prune -a
+docker-compose up -d --build
+```
 
-Configurar timeout de escolha e comportamento default (para nós de escolha)
+### FFmpeg não encontrado (desenvolvimento local)
 
-Isso aproxima a ferramenta do fluxo real de autoria, permitindo refinar os metadados de cada cena.
-​
+**Problema:** Erro ao processar vídeo
+**Solução:** Instalar FFmpeg:
+- **Windows:** `winget install FFmpeg` ou baixar de https://ffmpeg.org
+- **macOS:** `brew install ffmpeg`
+- **Ubuntu:** `sudo apt install ffmpeg`
 
-3. Validação básica do grafo
-Adicionar validações mínimas (utilidades em utils/validation.ts ou no shared):
+### CORS errors
 
-Detectar nós órfãos (sem arestas de entrada ou saída, quando não deveriam ser isolados)
+**Problema:** Erro de CORS no navegador
+**Solução:** Verificar se todos os serviços estão rodando nas portas corretas e se as URLs no `.env` estão configuradas.
 
-Verificar se existe nó inicial (por exemplo, um único nó marcado como start ou input)
+---
 
-Essas validações são parte dos diferenciais do projeto e ajudam o autor a não gerar grafos inválidos.
-​
+## 📚 Tecnologias
 
-🕒 Semana 3–4: API e Processamento
-Foco: persistir projetos e processar vídeos para HLS multi-bitrate.
-​
+| Categoria | Tecnologia |
+|-----------|------------|
+| **Frontend** | React 18, @xyflow/react, TypeScript, Vite, Tailwind CSS |
+| **Backend** | Node.js 20, Express, TypeScript |
+| **Player** | Vanilla TypeScript, hls.js |
+| **Processamento** | FFmpeg (HLS multi-bitrate) |
+| **Banco de Dados** | PostgreSQL 16 |
+| **Analytics** | PostgreSQL + REST + dashboard React (editor) |
+| **DevOps** | Docker, Docker Compose, Nginx |
 
-1. CRUD de projetos
-Na API (packages/api):
+---
 
-Endpoints para criar, listar, atualizar e remover projetos
+## 📄 Licença
 
-Salvar/carregar grafos em JSON:
+MIT License - veja [LICENSE](LICENSE) para detalhes.
 
-Inicialmente, pode ser em arquivos locais (ex.: diretório data/)
+---
 
-Evoluir para PostgreSQL ou SQLite conforme o cronograma
+## 👤 Autor
 
-O payload deve refletir o InteractiveGraph definido em shared, garantindo contrato único entre editor, API e player.
-​
+**Victor** - Projeto de TCC em Sistemas de Informação
 
-2. Integração com FFmpeg (HLS)
-Configurar um serviço (ex.: services/ffmpegService.ts) para:
+Motor de Narrativa Interativa Open Source
 
-Receber caminho/stream de vídeo de entrada
+---
 
-Transcodificar para HLS com múltiplas resoluções (360p, 720p, 1080p)
+## 🔗 Links Úteis
 
-Exemplo de comando base para HLS:
-
-bash
-ffmpeg -i input.mp4 \
-  -c:v libx264 -c:a aac \
-  -hls_time 10 \
-  -hls_playlist_type vod \
-  -hls_segment_filename "output_%03d.ts" \
-  output.m3u8
-Esse pipeline alinha o projeto com as boas práticas de HLS descritas na documentação técnica utilizada no TCC (RFC 8216, guias de FFmpeg para HLS).
-​
-
-3. Endpoint de upload de vídeo
-Na API:
-
-Endpoint POST /api/videos para:
-
-Receber o arquivo (multipart/form-data)
-
-Salvar temporariamente
-
-Rodar FFmpeg para gerar HLS e segmentos
-
-Retornar:
-
-URL do .m3u8
-
-Resoluções disponíveis
-
-Metadados (duração, tamanho, etc.)
-
-O editor deve então consumir esse endpoint para associar vídeos aos nós de tipo video.
-​
-
-🕒 Semana 5–6: Player Interativo
-Foco: leitura do grafo exportado e experiência interativa no navegador.
-​
-
-1. Carregar grafo exportado
-No player:
-
-Receber um JSON de grafo (via URL, query param ou embed)
-
-Fazer parse do JSON para a estrutura InteractiveGraph
-
-Identificar o nó inicial (ex.: tipo start ou input) e começar por ele
-
-Isso garante que o player interpreta o mesmo formato que o editor exporta, centralizando o modelo no shared.
-​
-
-2. Navegação por escolhas
-Implementar:
-
-Overlay de escolhas:
-
-Componente que aparece em momentos específicos (por exemplo, nos últimos X segundos de um vídeo)
-
-Botões que representam as opções ligadas pelas edges saindo do nó atual
-
-Troca de vídeo ao clicar:
-
-Ao clicar em uma escolha, o player:
-
-Atualiza o nó corrente
-
-Carrega o próximo fluxo HLS correspondente
-
-Atualiza histórico de navegação (para analytics)
-
-Gerenciamento de estado da sessão:
-
-Estado em memória (ou localStorage) com:
-
-Nó atual
-
-Caminho percorrido
-
-Variáveis de sessão (futuro para lógica condicional)
-
-Essa lógica implementa, na prática, o grafo de narrativa interativa que o editor modela.
-​
-
-3. Prefetching (otimização)
-Adicionar um serviço de prefetch:
-
-Identificar próximos nós prováveis a partir do grafo
-
-Pré-carregar segmentos HLS dos caminhos mais utilizados, respeitando limites de banda
-
-Melhorar a experiência em conexões lentas, reduzindo rebuffering após cada escolha
-
-O prefetching é um dos diferenciais técnicos previstos no projeto para controlar banda e latência em cenários reais de streaming.
-​
-
-🧪 Fluxo de Desenvolvimento Recomendado
-Configurar ambiente e monorepo
-
-Node 20+, PNPM, repositório Git, pnpm-workspace, etc.
-​
-
-Garantir que o shared compila
-
-Tipos do grafo, interfaces de validação e utilitários básicos
-
-Focar primeiro no editor (Semana 1–2)
-
-Assim você consegue mostrar algo visualmente rápido para professor/orientador
-
-Em seguida, API e processamento (Semana 3–4)
-
-Persistência em JSON + pipeline FFmpeg simples já é suficiente para um MVP
-
-Por fim, o player interativo (Semana 5–6)
-
-Começar com navegação simples e depois adicionar prefetching e analytics
-
-Esse roadmap está alinhado com o path de estudo e de implementação descrito no documento de projeto do TCC, respeitando a ordem de complexidade e dependências entre componentes.
+- [React Flow Docs](https://reactflow.dev)
+- [hls.js Documentation](https://github.com/video-dev/hls.js/)
+- [FFmpeg HLS Guide](https://trac.ffmpeg.org/wiki/Encode/H.264)
+- [Docker Compose Reference](https://docs.docker.com/compose/)

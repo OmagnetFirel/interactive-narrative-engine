@@ -1,403 +1,146 @@
+import 'dotenv/config';
 import express from 'express';
 import cors from 'cors';
-import dotenv from 'dotenv';
+import helmet from 'helmet';
 import path from 'path';
-import type { InteractiveGraph } from '@ine/shared';
-import { upload } from './config/multer';
-import { convertToHLS, getVideoMetadata, checkFFmpegInstalled } from './services/ffmpegService';
-import { createStitchedPlaylistForPath, cleanOldStitchedPlaylists } from './services/hlsStitchingService.js';
 import fs from 'fs/promises';
-import { fileURLToPath } from 'url';
+import { registerProjectsRoutes } from './routes/projects.js';
+import { registerVideosRoutes } from './routes/videos.js';
+import { registerAuthRoutes, warnIfAuthNotConfigured } from './routes/auth.js';
+import { checkFFmpegInstalled } from './services/ffmpegService.js';
+import { createStitchedPlaylistForPath, cleanOldStitchedPlaylists } from './services/hlsStitchingService.js';
+import { createSession, appendToSession, endSession, cleanOldSessions } from './services/hlsSessionService.js';
+import { getProjectsRepository } from './repositories/projectsRepo.js';
+import { getVideosRepository } from './repositories/videosRepo.js';
+import { getPool } from './db/pool.js';
+import { initializeAuth } from './services/authService.js';
+import { assertSafeProductionSecrets, trustProxySetting, uploadsRoot } from './config/runtime.js';
+import {
+    generalLimiter, inviteLimiter, loginLimiter, publicExpensiveLimiter,
+} from './config/rateLimits.js';
 
-dotenv.config();
-
-const __filename = fileURLToPath(import.meta.url);
-const __dirname = path.dirname(__filename);
-
+assertSafeProductionSecrets();
 const app = express();
 const PORT = process.env.PORT || 3001;
+const PUBLIC_API_URL = process.env.PUBLIC_API_URL || `http://localhost:${PORT}`;
+const PUBLIC_MEDIA_URL = (process.env.PUBLIC_MEDIA_URL || PUBLIC_API_URL).replace(/\/$/, '');
+app.set('trust proxy', trustProxySetting());
 
-// Middlewares
-app.use(cors({
-    origin: ['http://localhost:3000', 'http://localhost:5173'],
-    credentials: true
-}));
-app.use(express.json());
+const defaultCorsOrigins = ['http://localhost:3000', 'http://localhost:5173'];
+const configuredCorsOrigins =
+    process.env.CORS_ORIGINS?.split(',')
+        .map((o) => o.trim())
+        .filter(Boolean) ?? [];
+const corsOrigins = process.env.NODE_ENV === 'production'
+    ? configuredCorsOrigins
+    : [...new Set([...defaultCorsOrigins, ...configuredCorsOrigins])];
 
-// Servir arquivos estáticos (HLS e thumbnails)
-app.use('/videos', express.static(path.join(__dirname, '../uploads/videos')));
-app.use('/hls', express.static(path.join(__dirname, '../uploads/hls')));
+app.use(helmet({ crossOriginResourcePolicy: { policy: 'cross-origin' } }));
+app.use(
+    cors({
+        origin: corsOrigins,
+        credentials: true,
+    })
+);
+app.use(express.json({ limit: '10mb' }));
+app.use(generalLimiter);
+app.use('/api/auth/login', loginLimiter);
+app.use('/api/auth/invites', inviteLimiter);
+app.use(['/api/playlists/stitch', '/api/sessions'], publicExpensiveLimiter);
 
-// Armazenamento em memória
-const projects: Map<string, InteractiveGraph> = new Map();
-const videos: Map<string, any> = new Map();
+// Garantir estrutura de diretórios (clone fresco / primeiro boot)
+for (const dir of ['videos', 'hls', 'temp']) {
+    await fs.mkdir(path.join(uploadsRoot, dir), { recursive: true });
+}
 
-// Health check
-app.get('/health', (req, res) => {
-    res.json({
-        status: 'ok',
-        timestamp: new Date().toISOString(),
-        projectsCount: projects.size,
-        videosCount: videos.size
-    });
-});
+app.use('/videos', express.static(path.join(uploadsRoot, 'videos')));
+app.use('/hls', express.static(path.join(uploadsRoot, 'hls')));
 
-// ============================================
-// PROJECTS ENDPOINTS
-// ============================================
+const projectsRepo = getProjectsRepository();
+const videosRepo = getVideosRepository();
 
-app.get('/api/projects', (req, res) => {
-    const projectList = Array.from(projects.values());
-    res.json({
-        projects: projectList,
-        count: projectList.length
-    });
-});
+await initializeAuth();
+warnIfAuthNotConfigured();
+registerAuthRoutes(app);
+registerProjectsRoutes(app);
+registerVideosRoutes(app, { uploadsRoot });
 
-app.post('/api/projects', (req, res) => {
-    const graph: InteractiveGraph = req.body;
-
-    if (!graph.name || !graph.nodes || !graph.edges) {
-        return res.status(400).json({
-            error: 'Grafo inválido: name, nodes e edges são obrigatórios'
-        });
-    }
-
-    projects.set(graph.id, graph);
-    console.log(`✅ Projeto salvo: ${graph.name} (${graph.nodes.length} nós)`);
-
-    res.status(201).json({
-        message: 'Projeto criado com sucesso',
-        project: graph
-    });
-});
-
-app.get('/api/projects/:id', (req, res) => {
-    const { id } = req.params;
-    const project = projects.get(id);
-
-    if (!project) {
-        return res.status(404).json({ error: 'Projeto não encontrado' });
-    }
-
-    res.json(project);
-});
-
-// ============================================
-// VIDEO UPLOAD ENDPOINTS
-// ============================================
-
-/**
- * Upload de vídeo
- */
-app.post('/api/videos/upload', upload.single('video'), async (req, res) => {
+app.get('/health', async (_req, res) => {
     try {
-        if (!req.file) {
-            return res.status(400).json({ error: 'Nenhum arquivo enviado' });
-        }
-
-        const file = req.file;
-        const videoId = path.parse(file.filename).name;
-
-        console.log(`📤 Upload recebido: ${file.originalname} (${(file.size / 1024 / 1024).toFixed(2)}MB)`);
-
-        // Extrair metadados
-        const metadata = await getVideoMetadata(file.path);
-        console.log(`📊 Metadados: ${metadata.width}x${metadata.height}, ${metadata.duration.toFixed(2)}s`);
-
-        // Salvar info temporária
-        videos.set(videoId, {
-            id: videoId,
-            originalName: file.originalname,
-            tempPath: file.path,
-            metadata,
-            status: 'uploaded',
-            uploadedAt: new Date().toISOString()
-        });
-
-        res.status(200).json({
-            message: 'Upload realizado com sucesso',
-            videoId,
-            metadata: {
-                duration: metadata.duration,
-                width: metadata.width,
-                height: metadata.height,
-                size: file.size
-            }
-        });
-
-    } catch (error: any) {
-        console.error('❌ Erro no upload:', error);
-        res.status(500).json({ error: error.message });
-    }
-});
-
-/**
- * Processar vídeo para HLS
- */
-app.post('/api/videos/:videoId/process', async (req, res) => {
-    try {
-        const { videoId } = req.params;
-        const videoInfo = videos.get(videoId);
-
-        if (!videoInfo) {
-            return res.status(404).json({ error: 'Vídeo não encontrado' });
-        }
-
-        if (videoInfo.status === 'processing') {
-            return res.status(409).json({ error: 'Vídeo já está sendo processado' });
-        }
-
-        // Atualizar status
-        videoInfo.status = 'processing';
-        videos.set(videoId, videoInfo);
-
-        console.log(`🎬 Iniciando processamento HLS: ${videoId}`);
-
-        // Processar HLS em background
-        const outputDir = path.join(__dirname, '../uploads/hls', videoId);
-
-        // Responder imediatamente
-        res.status(202).json({
-            message: 'Processamento iniciado',
-            videoId,
-            status: 'processing'
-        });
-
-        // Processar (assíncrono)
-        convertToHLS(videoInfo.tempPath, outputDir, videoId)
-            .then(async (hlsOutput) => {
-                // Atualizar info do vídeo
-                videoInfo.status = 'ready';
-                videoInfo.hlsUrl = `/hls/${videoId}/${hlsOutput.masterPlaylist}`;
-                videoInfo.thumbnailUrl = hlsOutput.thumbnailUrl ? `/hls/${videoId}/${hlsOutput.thumbnailUrl}` : undefined;
-                videoInfo.variants = hlsOutput.variants;
-                videoInfo.processedAt = new Date().toISOString();
-                videos.set(videoId, videoInfo);
-
-                // Remover arquivo temporário
-                await fs.unlink(videoInfo.tempPath);
-                console.log(`✅ Processamento concluído: ${videoId}`);
-            })
-            .catch((error) => {
-                console.error(`❌ Erro no processamento: ${error.message}`);
-                videoInfo.status = 'error';
-                videoInfo.error = error.message;
-                videos.set(videoId, videoInfo);
-            });
-
-    } catch (error: any) {
-        console.error('❌ Erro ao iniciar processamento:', error);
-        res.status(500).json({ error: error.message });
-    }
-});
-
-/**
- * Status do processamento
- */
-app.get('/api/videos/:videoId/status', (req, res) => {
-    const { videoId } = req.params;
-    const videoInfo = videos.get(videoId);
-
-    if (!videoInfo) {
-        return res.status(404).json({ error: 'Vídeo não encontrado' });
-    }
-
-    res.json({
-        videoId,
-        status: videoInfo.status,
-        hlsUrl: videoInfo.hlsUrl,
-        thumbnailUrl: videoInfo.thumbnailUrl,
-        metadata: videoInfo.metadata,
-        error: videoInfo.error
-    });
-});
-
-/**
- * Listar vídeos
- */
-app.get('/api/videos', (req, res) => {
-    const videoList = Array.from(videos.values()).map(v => ({
-        id: v.id,
-        originalName: v.originalName,
-        status: v.status,
-        hlsUrl: v.hlsUrl,
-        thumbnailUrl: v.thumbnailUrl,
-        metadata: v.metadata,
-        uploadedAt: v.uploadedAt,
-        processedAt: v.processedAt
-    }));
-
-    res.json({
-        videos: videoList,
-        count: videoList.length
-    });
-});
-
-/**
- * ✅ NOVO: Re-transcodificar um vídeo existente para compatibilidade com stitching
- */
-app.post('/api/videos/:videoId/retranscode', async (req, res) => {
-    try {
-        const { videoId } = req.params;
-        const hlsDir = path.join(__dirname, '../uploads/hls', videoId);
-
-        // Verificar se o vídeo existe
-        try {
-            await fs.access(hlsDir);
-        } catch {
-            return res.status(404).json({ error: 'Vídeo não encontrado' });
-        }
-
-        // Buscar arquivo .ts original para re-transcodificar
-        const files = await fs.readdir(hlsDir);
-        const tsFiles = files.filter(f => f.endsWith('.ts')).sort();
-
-        if (tsFiles.length === 0) {
-            return res.status(400).json({ error: 'Nenhum segmento .ts encontrado' });
-        }
-
-        console.log(`🔄 Re-transcodificando vídeo: ${videoId}`);
-        console.log(`   Encontrados ${tsFiles.length} segmentos .ts`);
-
-        // Por enquanto, retornar informação sobre o que precisa ser feito
-        res.json({
-            message: 'Para re-transcodificar, faça upload do vídeo original novamente',
-            videoId,
-            currentSegments: tsFiles.length,
-            hint: 'Os novos parâmetros de encoding serão aplicados automaticamente no próximo upload'
-        });
-
-    } catch (error: any) {
-        console.error('❌ Erro ao re-transcodificar:', error);
-        res.status(500).json({ error: error.message });
-    }
-});
-
-/**
- * ✅ NOVO: Verificar compatibilidade de codecs entre vídeos
- */
-app.post('/api/videos/check-compatibility', async (req, res) => {
-    try {
-        const { videoIds } = req.body;
-
-        if (!Array.isArray(videoIds) || videoIds.length < 2) {
-            return res.status(400).json({ error: 'videoIds deve ser um array com pelo menos 2 IDs' });
-        }
-
-        const hlsDir = path.join(__dirname, '../uploads/hls');
-        const results: any[] = [];
-
-        for (const videoId of videoIds) {
-            const videoPath = path.join(hlsDir, videoId);
-
-            try {
-                await fs.access(videoPath);
-
-                // Buscar primeiro segmento .ts para análise
-                const files = await fs.readdir(videoPath);
-                const firstTs = files.find(f => f.endsWith('.ts') && !f.includes('_stitched'));
-
-                if (firstTs) {
-                    const tsPath = path.join(videoPath, firstTs);
-                    const metadata = await getVideoMetadata(tsPath);
-
-                    results.push({
-                        videoId,
-                        exists: true,
-                        codec: metadata.codec,
-                        width: metadata.width,
-                        height: metadata.height,
-                        fps: metadata.fps
-                    });
-                } else {
-                    results.push({
-                        videoId,
-                        exists: true,
-                        error: 'Nenhum segmento .ts encontrado'
-                    });
-                }
-            } catch {
-                results.push({
-                    videoId,
-                    exists: false
-                });
-            }
-        }
-
-        // Verificar compatibilidade
-        const validResults = results.filter(r => r.exists && !r.error);
-        const codecs = [...new Set(validResults.map(r => r.codec))];
-        const resolutions = [...new Set(validResults.map(r => `${r.width}x${r.height}`))];
-
-        const isCompatible = codecs.length === 1 && resolutions.length === 1;
+        const [projectsCount, videosCount] = await Promise.all([
+            projectsRepo.count(),
+            videosRepo.count(),
+        ]);
 
         res.json({
-            compatible: isCompatible,
-            videos: results,
-            summary: {
-                codecs,
-                resolutions,
-                recommendation: isCompatible
-                    ? 'Vídeos são compatíveis para stitching'
-                    : 'Re-transcodifique os vídeos com as mesmas configurações para compatibilidade'
-            }
+            status: 'ok',
+            timestamp: new Date().toISOString(),
+            storage: {
+                projects: projectsRepo.mode,
+                videos: videosRepo.mode,
+            },
+            projectsCount,
+            videosCount,
         });
-
-    } catch (error: any) {
-        console.error('❌ Erro ao verificar compatibilidade:', error);
-        res.status(500).json({ error: error.message });
+    } catch (e: any) {
+        res.status(500).json({
+            status: 'degraded',
+            error: e?.message ?? 'Falha ao consultar contagens',
+        });
     }
 });
 
-(async () => {
-    const hasFFmpeg = await checkFFmpegInstalled();
-    if (!hasFFmpeg) {
-        console.warn('⚠️  FFmpeg não encontrado no sistema!');
-        console.warn('   Instale com: brew install ffmpeg (macOS) ou apt install ffmpeg (Linux)');
-    } else {
-        console.log('✅ FFmpeg detectado');
+async function publicProjectAllowsVideos(shareToken: unknown, videoIds: unknown): Promise<boolean> {
+    if (typeof shareToken !== 'string' || !Array.isArray(videoIds)) return false;
+    const project = await projectsRepo.getByShareToken(shareToken);
+    if (!project) return false;
+    const publicVideoIds = new Set<string>();
+    for (const node of project.nodes) {
+        const videoUrl = node.data.videoUrl;
+        if (typeof videoUrl !== 'string') continue;
+        const match = videoUrl.match(
+            /\/hls\/([a-f0-9]{8}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{12})(?:\/|$)/i
+        );
+        if (match) publicVideoIds.add(match[1].toLowerCase());
     }
-})();
-
-/**
- *  Criar playlist stitched para um caminho específico
- */
+    return videoIds.every(
+        (id) => typeof id === 'string' && publicVideoIds.has(id.toLowerCase())
+    );
+}
 
 app.post('/api/playlists/stitch', async (req, res) => {
     try {
-        const { nodePath } = req.body;
+        const { nodePath, shareToken } = req.body;
 
         if (!Array.isArray(nodePath) || nodePath.length === 0) {
             return res.status(400).json({ error: 'nodePath deve ser um array não vazio' });
+        }
+        if (!(await publicProjectAllowsVideos(shareToken, nodePath))) {
+            return res.status(403).json({ error: 'Projeto público não autoriza estes vídeos' });
         }
 
         console.log(`\n📝 ===== REQUISIÇÃO DE STITCHING =====`);
         console.log(`nodePath recebido (${nodePath.length} vídeos): ${nodePath.join(' → ')}`);
 
-        // ✅ Se só tem 1 vídeo, não precisa stitching
         if (nodePath.length === 1) {
             console.log('ℹ️ Apenas 1 vídeo, stitching não necessário');
             return res.status(400).json({
-                error: 'Stitching requer pelo menos 2 vídeos'
+                error: 'Stitching requer pelo menos 2 vídeos',
             });
         }
 
-        // ✅ Validar que são UUIDs válidos
         const uuidRegex = /^[a-f0-9]{8}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{12}$/i;
 
         for (const id of nodePath) {
             if (!uuidRegex.test(id)) {
                 console.error(`❌ ID inválido (não é UUID): ${id}`);
                 return res.status(400).json({
-                    error: `ID inválido: ${id}. Esperado UUID de vídeo processado (ex: bcaf7d1d-0460-47f5-94e1-f15d0fd93358)`
+                    error: `ID inválido: ${id}. Esperado UUID de vídeo processado (ex: bcaf7d1d-0460-47f5-94e1-f15d0fd93358)`,
                 });
             }
         }
 
-        const baseHlsPath = path.join(__dirname, '../uploads/hls');
-
-        // ✅ Verificar se vídeos existem
+        const baseHlsPath = path.join(uploadsRoot, 'hls');
         const missingVideos: string[] = [];
 
         for (const videoId of nodePath) {
@@ -415,7 +158,7 @@ app.post('/api/playlists/stitch', async (req, res) => {
             return res.status(404).json({
                 error: `${missingVideos.length} vídeo(s) não encontrado(s)`,
                 missingVideos,
-                hint: 'Certifique-se de que todos os vídeos foram processados e estão em uploads/hls/{videoId}/'
+                hint: 'Certifique-se de que todos os vídeos foram processados e estão em uploads/hls/{videoId}/',
             });
         }
 
@@ -425,34 +168,199 @@ app.post('/api/playlists/stitch', async (req, res) => {
 
         res.json({
             message: 'Playlist stitched criada com sucesso',
-            masterPlaylistUrl: `http://localhost:${PORT}${result.masterPlaylistUrl}`,
+            masterPlaylistUrl: `${PUBLIC_MEDIA_URL}${result.masterPlaylistUrl}`,
             playlistId: result.playlistId,
-            videosCount: nodePath.length
+            videosCount: nodePath.length,
         });
-
     } catch (error: any) {
         console.error('❌ Erro ao criar playlist stitched:', error);
         res.status(500).json({
-            error: error.message,
-            stack: process.env.NODE_ENV === 'development' ? error.stack : undefined
+            error: error?.message ?? 'Erro ao criar playlist stitched',
+            stack: process.env.NODE_ENV === 'development' ? error?.stack : undefined,
         });
     }
 });
 
-/**
- * Limpar playlists antigas a cada 30 minutos
- */
+const uuidRegex = /^[a-f0-9]{8}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{12}$/i;
+const playbackSessionTokens = new Map<string, string>();
+
+type ValidationError = { status: number; body: Record<string, unknown> };
+
+async function validateVideoIds(nodePath: unknown, baseHlsPath: string): Promise<
+    { ids: string[]; error?: undefined } | { ids?: undefined; error: ValidationError }
+> {
+    if (!Array.isArray(nodePath) || nodePath.length === 0) {
+        return { error: { status: 400, body: { error: 'nodePath deve ser um array não vazio' } } };
+    }
+
+    for (const id of nodePath) {
+        if (typeof id !== 'string' || !uuidRegex.test(id)) {
+            return { error: { status: 400, body: { error: `ID inválido: ${id}. Esperado UUID de vídeo processado` } } };
+        }
+    }
+
+    const missingVideos: string[] = [];
+    for (const videoId of nodePath as string[]) {
+        try {
+            await fs.access(path.join(baseHlsPath, videoId));
+        } catch {
+            missingVideos.push(videoId);
+        }
+    }
+
+    if (missingVideos.length > 0) {
+        return {
+            error: {
+                status: 404,
+                body: {
+                    error: `${missingVideos.length} vídeo(s) não encontrado(s)`,
+                    missingVideos,
+                    hint: 'Certifique-se de que todos os vídeos foram processados e estão em uploads/hls/{videoId}/',
+                },
+            },
+        };
+    }
+
+    return { ids: nodePath as string[] };
+}
+
+// ✅ SESSÕES DE PLAYBACK (seamless / EVENT) — URL estável que cresce por append
+app.post('/api/sessions', async (req, res) => {
+    try {
+        if (!(await publicProjectAllowsVideos(req.body?.shareToken, req.body?.nodePath))) {
+            return res.status(403).json({ error: 'Projeto público não autoriza estes vídeos' });
+        }
+        const baseHlsPath = path.join(uploadsRoot, 'hls');
+        const validation = await validateVideoIds(req.body?.nodePath, baseHlsPath);
+        if (validation.error) {
+            return res.status(validation.error.status).json(validation.error.body);
+        }
+
+        const result = await createSession(validation.ids, baseHlsPath);
+        playbackSessionTokens.set(result.sessionId, req.body.shareToken);
+
+        res.json({
+            message: 'Sessão de playback criada',
+            sessionId: result.sessionId,
+            masterPlaylistUrl: `${PUBLIC_MEDIA_URL}${result.masterPlaylistUrl}`,
+            videosCount: validation.ids.length,
+        });
+    } catch (error: any) {
+        if (error?.code === 'INCOMPATIBLE_VIDEOS') {
+            return res.status(422).json({
+                error: error.message,
+                code: error.code,
+                report: error.report,
+            });
+        }
+        console.error('❌ Erro ao criar sessão:', error);
+        res.status(500).json({ error: error?.message ?? 'Erro ao criar sessão' });
+    }
+});
+
+app.post('/api/sessions/:sessionId/append', async (req, res) => {
+    try {
+        const { sessionId } = req.params;
+        if (playbackSessionTokens.get(sessionId) !== req.body?.shareToken ||
+            !(await publicProjectAllowsVideos(req.body?.shareToken, req.body?.nodePath))) {
+            return res.status(403).json({ error: 'Sessão pública inválida' });
+        }
+        const baseHlsPath = path.join(uploadsRoot, 'hls');
+        const validation = await validateVideoIds(req.body?.nodePath, baseHlsPath);
+        if (validation.error) {
+            return res.status(validation.error.status).json(validation.error.body);
+        }
+
+        const result = await appendToSession(sessionId, validation.ids, baseHlsPath);
+
+        res.json({
+            message: 'Vídeos anexados à sessão',
+            sessionId,
+            totalVideos: result.totalVideos,
+            appended: result.appended,
+        });
+    } catch (error: any) {
+        if (error?.code === 'SESSION_NOT_FOUND') {
+            return res.status(404).json({ error: 'Sessão não encontrada', code: error.code });
+        }
+        if (error?.code === 'RESOLUTION_MISMATCH') {
+            return res.status(409).json({ error: error.message, code: error.code });
+        }
+        if (error?.code === 'INCOMPATIBLE_VIDEOS') {
+            return res.status(422).json({
+                error: error.message,
+                code: error.code,
+                report: error.report,
+            });
+        }
+        console.error('❌ Erro ao anexar à sessão:', error);
+        res.status(500).json({ error: error?.message ?? 'Erro ao anexar à sessão' });
+    }
+});
+
+app.post('/api/sessions/:sessionId/end', async (req, res) => {
+    try {
+        const { sessionId } = req.params;
+        if (playbackSessionTokens.get(sessionId) !== req.body?.shareToken ||
+            !(await publicProjectAllowsVideos(req.body?.shareToken, []))) {
+            return res.status(403).json({ error: 'Sessão pública inválida' });
+        }
+        const baseHlsPath = path.join(uploadsRoot, 'hls');
+        await endSession(sessionId, baseHlsPath);
+        playbackSessionTokens.delete(sessionId);
+        res.json({ message: 'Sessão encerrada', sessionId });
+    } catch (error: any) {
+        console.error('❌ Erro ao encerrar sessão:', error);
+        res.status(500).json({ error: error?.message ?? 'Erro ao encerrar sessão' });
+    }
+});
+
+app.use((error: any, _req: express.Request, res: express.Response, _next: express.NextFunction) => {
+    if (error?.code === 'LIMIT_FILE_SIZE') {
+        return res.status(413).json({
+            error: 'Arquivo excede o limite máximo permitido para upload',
+            code: 'UPLOAD_TOO_LARGE',
+        });
+    }
+    console.error('❌ Erro não tratado:', error);
+    res.status(500).json({ error: 'Erro interno do servidor' });
+});
+
 setInterval(async () => {
-    const baseHlsPath = path.join(__dirname, '../uploads/hls');
-    await cleanOldStitchedPlaylists(baseHlsPath);
+    try {
+        const baseHlsPath = path.join(uploadsRoot, 'hls');
+        await cleanOldStitchedPlaylists(baseHlsPath);
+        await cleanOldSessions(baseHlsPath);
+    } catch (error) {
+        console.error('❌ Falha na limpeza periódica de playlists:', error);
+    }
 }, 30 * 60 * 1000);
 
+(async () => {
+    const hasFFmpeg = await checkFFmpegInstalled();
+    if (!hasFFmpeg) {
+        console.warn('⚠️  FFmpeg não encontrado no sistema!');
+        console.warn('   Instale com: brew install ffmpeg (macOS) ou apt install ffmpeg (Linux)');
+    } else {
+        console.log('✅ FFmpeg detectado');
+    }
 
+    const pool = getPool();
+    if (pool) {
+        try {
+            await pool.query('SELECT 1');
+            console.log('✅ PostgreSQL conectado');
+        } catch (e: any) {
+            console.error('❌ Falha ao conectar no PostgreSQL:', e?.message ?? e);
+            console.error('   A API continuará subindo, mas operações que dependem do banco vão falhar.');
+        }
+    }
+})();
 
-// Start server
 app.listen(PORT, () => {
     console.log(`🚀 API rodando em http://localhost:${PORT}`);
     console.log(`📊 Health: http://localhost:${PORT}/health`);
-    console.log(`🔗 CORS habilitado para Editor (3000) e Player (5173)`);
-    console.log(`📹 Uploads: ${path.join(__dirname, '../uploads')}`);
+    console.log(`🔗 CORS habilitado para: ${corsOrigins.join(', ') || '(nenhuma origem)'}`);
+    console.log(`📹 Uploads: ${uploadsRoot}`);
+    console.log(`🗃️ Storage: projects=${projectsRepo.mode}, videos=${videosRepo.mode}`);
 });

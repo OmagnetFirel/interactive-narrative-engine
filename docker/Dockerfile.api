@@ -1,0 +1,34 @@
+FROM node:20-alpine
+
+# Instalar FFmpeg
+RUN apk add --no-cache ffmpeg
+
+WORKDIR /app
+
+# Instalar pnpm
+RUN npm install -g pnpm
+
+# Copiar package files
+COPY package.json pnpm-lock.yaml pnpm-workspace.yaml ./
+COPY packages/shared/package.json ./packages/shared/
+COPY packages/api/package.json ./packages/api/
+
+# Instalar dependências
+RUN pnpm install --frozen-lockfile
+
+# Copiar código fonte
+COPY packages/shared ./packages/shared
+COPY packages/api ./packages/api
+
+# Build
+RUN pnpm --filter @ine/shared build
+RUN pnpm --filter @ine/api build
+
+# Criar diretórios para uploads
+RUN mkdir -p /app/uploads/videos \
+    /app/uploads/hls \
+    /app/uploads/temp
+
+EXPOSE 3001
+
+CMD ["node", "packages/api/dist/index.js"]

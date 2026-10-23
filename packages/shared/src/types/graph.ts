@@ -22,6 +22,7 @@ export interface ChoiceNodeData {
     duration?: number;
     timeout?: number;
     defaultChoice?: string; // ID da edge default
+    choiceBeforeEnd?: number; // Segundos antes do fim do vídeo de transição para mostrar as escolhas
 }
 
 // Node Final (pode ter vídeo final ou apenas mensagem)
@@ -61,6 +62,8 @@ export interface GraphNode {
     data: VideoNodeData | ChoiceNodeData | EndNodeData;
 }
 
+export type ProjectVisibility = 'public' | 'private';
+
 // Grafo completo
 export interface InteractiveGraph {
     id: string;
@@ -68,6 +71,8 @@ export interface InteractiveGraph {
     description?: string;
     nodes: GraphNode[];
     edges: GraphEdge[];
+    visibility?: ProjectVisibility;
+    shareToken?: string;
     metadata?: {
         createdAt: string;
         updatedAt: string;
@@ -100,30 +105,4 @@ export interface ValidationResult {
     valid: boolean;
     errors: ValidationError[];
     warnings: ValidationWarning[];
-}
-
-// Analytics
-export type AnalyticsEventType = 'session_start' | 'node_enter' | 'node_exit' | 'choice_made' | 'choice_timeout' | 'session_end';
-
-export interface AnalyticsEvent {
-    eventType: AnalyticsEventType;
-    timestamp: string;
-    sessionId: string;
-    projectId: string;
-    nodeId?: string;
-    edgeId?: string;
-    metadata?: Record<string, any>;
-}
-
-export interface SessionData {
-    sessionId: string;
-    graphId: string;
-    startTime: string;
-    endTime?: string;
-    pathTaken: string[]; // Array de node IDs
-    choicesMade: Array<{
-        nodeId: string;
-        choiceLabel: string;
-        timestamp: string;
-    }>;
 }

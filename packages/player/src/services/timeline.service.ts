@@ -2,6 +2,9 @@ import type { GraphNode, VideoSegment } from '../core/types';
 import { state } from '../core/state';
 import { formatTime } from '../utils/format.utils';
 import { dom } from '../ui/dom-elements';
+import { hideChoices } from '../ui/overlay.ui';
+import { debugLog, logTimelineSegmentChange, logNoSegmentMatch } from '../utils/debug.util';
+import { onTimelineBuilt, onTimelineAppended, resetProgressDisplay } from '../ui/progress.ui';
 
 export class TimelineService {
     buildVirtualTimeline(nodePath: GraphNode[]): void {
@@ -11,7 +14,7 @@ export class TimelineService {
         let accumulatedTime = 0;
 
         for (const node of nodePath) {
-            const duration = (node.data as any).duration || 0;
+            const duration = Math.max((node.data as any).duration || 0, 0.25);
 
             state.virtualTimeline.push({
                 node,
@@ -29,9 +32,18 @@ export class TimelineService {
         state.virtualTotalDuration = accumulatedTime;
         state.currentSegmentIndex = 0;
 
-        console.log(`✅ Timeline total: ${formatTime(state.virtualTotalDuration)}`);
+        debugLog('timeline', 'Timeline construída', {
+            totalDuration: accumulatedTime,
+            segments: state.virtualTimeline.map((s, i) => ({
+                i,
+                label: s.node.data.label,
+                start: s.startTime,
+                end: s.startTime + s.duration,
+            })),
+        });
 
         this.updateTimelineUI();
+        onTimelineBuilt();
     }
 
     /**
@@ -46,7 +58,7 @@ export class TimelineService {
         let accumulatedTime = state.virtualTotalDuration;
 
         for (const node of nodePath) {
-            const duration = (node.data as any).duration || 0;
+            const duration = Math.max((node.data as any).duration || 0, 0.25);
 
             // Verificar se já existe na timeline
             const alreadyExists = state.virtualTimeline.some(seg => seg.node.id === node.id);
@@ -75,13 +87,17 @@ export class TimelineService {
 
         state.virtualTotalDuration = accumulatedTime;
 
-        console.log(`✅ Timeline expandida para: ${formatTime(state.virtualTotalDuration)}`);
+        debugLog('timeline', 'Timeline expandida', {
+            totalDuration: accumulatedTime,
+            added: nodePath.map(n => n.data.label),
+        });
 
         this.updateTimelineUI();
+        onTimelineAppended();
     }
 
     /**
-     * ✅ NOVO: Atualizar UI da timeline (seekbar, duração total)
+     * Atualizar UI da timeline (seekbar, duração total)
      */
     private updateTimelineUI(): void {
         dom.totalTimeSpan.textContent = formatTime(state.virtualTotalDuration);
@@ -138,23 +154,39 @@ export class TimelineService {
         for (let i = 0; i < state.virtualTimeline.length; i++) {
             const segment = state.virtualTimeline[i];
             const segmentEnd = segment.startTime + segment.duration;
+            const isLast = i === state.virtualTimeline.length - 1;
+            const epsilon = 0.2;
 
-            if (currentTime >= segment.startTime && currentTime < segmentEnd) {
+            const inSegment = isLast
+                ? currentTime >= segment.startTime - epsilon && currentTime <= segmentEnd + epsilon
+                : currentTime >= segment.startTime - epsilon && currentTime < segmentEnd;
+
+            if (inSegment) {
                 if (state.currentSegmentIndex !== i) {
-                    console.log(`🔄 Segmento atualizado: ${state.currentSegmentIndex + 1} → ${i + 1}`);
+                    const prevIndex = state.currentSegmentIndex;
                     state.currentSegmentIndex = i;
                     state.currentNode = segment.node;
+                    state.hasChosenDuringVideo = false;
+                    state.choiceResolvedNodeId = null;
+                    state.stitchedPrefetchSegmentIndex = -1;
+                    state.stitchedTransitionedFromIndex = -1;
 
-                    // Atualizar UI
+                    if (state.choicesShown) {
+                        hideChoices();
+                    }
+                    state.choicesShown = false;
+
+                    logTimelineSegmentChange(prevIndex, i, currentTime);
                     dom.currentNodeSpan.textContent = segment.node.data.label;
                 }
                 return;
             }
         }
 
-        // Se passou do último segmento
         if (currentTime >= state.virtualTotalDuration) {
             state.currentSegmentIndex = state.virtualTimeline.length - 1;
+        } else {
+            logNoSegmentMatch(currentTime);
         }
     }
 
@@ -215,6 +247,7 @@ export class TimelineService {
         state.virtualTimeline = [];
         state.currentSegmentIndex = 0;
         state.virtualTotalDuration = 0;
+        resetProgressDisplay();
     }
 }
 

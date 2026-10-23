@@ -18,8 +18,15 @@ export interface PlayerState {
     choicesShown: boolean;
     nextNodeQueued: GraphNode | null;
     hasChosenDuringVideo: boolean;
+    /** Nó em que o espectador já confirmou escolha (evita overlay reaparecer no mesmo segmento). */
+    choiceResolvedNodeId: string | null;
     stitchedPlaylistUrl: string | null;
+    /** Índice do segmento para o qual já fizemos prefetch HLS. */
+    stitchedPrefetchSegmentIndex: number;
+    /** Índice do segmento a partir do qual já transicionamos antecipadamente. */
+    stitchedTransitionedFromIndex: number;
     stitchedPath: GraphNode[];
+    sessionId: string | null;
     isWaitingForVideoEnd: boolean;
     virtualTimeline: VideoSegment[];
     currentSegmentIndex: number;
@@ -27,6 +34,7 @@ export interface PlayerState {
     isSeekingVirtual: boolean;
     timeoutId: number | null;
     controlsTimeout: number | null;
+    sessionFinalizeRequested: boolean;
 }
 
 export type { InteractiveGraph, GraphNode, GraphEdge };

@@ -1,18 +1,318 @@
 @import "@xyflow/react/dist/style.css";
 @import "tailwindcss";
 
-/* Estilos customizados */
+/* =====================================================================
+   Identidade visual — branco quente, marrom, cobre e vermelho
+   Cobre é a cor de identidade. Vermelho fica restrito a seleção,
+   ação primária de atenção, progresso e estados de erro.
+   ===================================================================== */
+@theme {
+  --color-bg: #faf8f4;
+  --color-surface: #ffffff;
+  --color-surface-hover: #f3ebe3;
+
+  /* Cobre profundo para texto e controles (contraste em fundo claro). */
+  --color-primary: #9a5f2a;
+  /* Cobre de marca para ícones, handles e detalhes. */
+  --color-copper: #b87333;
+  --color-copper-light: #d99a5b;
+
+  --color-secondary: #5a3828;
+  --color-accent: #9a5f2a;
+  --color-danger: #d64a45;
+  --color-danger-soft: #f08a8a;
+
+  --color-text: #241711;
+  --color-text-secondary: #6e5c4c;
+
+  --color-border: #e7d8ca;
+  --color-ink: #3a2418;
+  --color-ink-soft: #5a3828;
+
+  /* Nós normais compartilham o cobre; a seleção usa o vermelho. */
+  --color-node-video: #b87333;
+  --color-node-choice: #b87333;
+  --color-node-end: #b87333;
+
+  --shadow-node: 0 4px 14px rgba(58, 36, 24, 0.08);
+  --shadow-node-selected: 0 0 0 1px #d64a45, 0 8px 18px rgba(214, 74, 69, 0.16);
+  --shadow-soft: 0 8px 24px rgba(58, 36, 24, 0.08);
+}
+
+/* ===================== Base ===================== */
+@layer base {
+  html,
+  body,
+  #root {
+    min-height: 100vh;
+    background: var(--color-bg);
+    color: var(--color-text);
+  }
+
+  body {
+    font-family: "Segoe UI", "Helvetica Neue", Helvetica, Arial, sans-serif;
+  }
+}
+
+/* Cromado estrutural: sidebar, header e áreas de ferramenta. */
+.panel-floating,
+.chrome {
+  --color-text: #faf8f4;
+  --color-text-secondary: #e4d3c4;
+  --color-primary: #d99a5b;
+  --color-secondary: #e7c4a0;
+  --color-accent: #e7c4a0;
+  --color-danger: #f08a8a;
+  --color-surface-hover: rgba(250, 248, 244, 0.08);
+}
+
+/* ===================== Componentes reutilizáveis ===================== */
 @layer components {
-  .react-flow__node {
-    cursor: grab;
+  .btn-primary {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+    padding: 10px 16px;
+    border-radius: 8px;
+    font-size: 14px;
+    font-weight: 600;
+    color: #ffffff;
+    background: #9a5f2a;
+    border: 1px solid transparent;
+    box-shadow: 0 4px 12px rgba(154, 95, 42, 0.22);
+    transition: background 0.15s ease, box-shadow 0.15s ease, transform 0.15s ease;
+  }
+  .btn-primary:hover {
+    background: #b87333;
+    box-shadow: 0 6px 16px rgba(184, 115, 51, 0.28);
+  }
+  .btn-primary:disabled {
+    opacity: 0.5;
+    box-shadow: none;
+    cursor: not-allowed;
   }
 
-  .react-flow__node.selected {
-    cursor: grabbing;
+  .btn-secondary {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+    padding: 10px 16px;
+    border-radius: 8px;
+    font-size: 14px;
+    font-weight: 600;
+    color: #3a2418;
+    background: #ffffff;
+    border: 1px solid #b87333;
+    transition: background 0.15s ease, border-color 0.15s ease;
+  }
+  .btn-secondary:hover {
+    background: #faf8f4;
+    border-color: #d99a5b;
   }
 
-  .react-flow__handle {
-    width: 12px;
-    height: 12px;
+  .btn-ghost {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+    padding: 10px 16px;
+    border-radius: 8px;
+    font-size: 14px;
+    font-weight: 600;
+    color: #9a5f2a;
+    background: transparent;
+    border: 1px solid transparent;
+    transition: background 0.15s ease, color 0.15s ease;
   }
+  .btn-ghost:hover {
+    background: rgba(184, 115, 51, 0.08);
+    color: #8f5626;
+  }
+
+  .card {
+    background: #ffffff;
+    border: 1px solid #e7d8ca;
+    border-radius: 16px;
+    box-shadow: var(--shadow-soft);
+  }
+  .card-interactive {
+    transition: border-color 0.15s ease, box-shadow 0.15s ease;
+  }
+  .card-interactive:hover {
+    border-color: #b87333;
+    box-shadow: 0 10px 24px rgba(58, 36, 24, 0.1);
+  }
+
+  .panel-floating {
+    background: #3a2418;
+    color: #faf8f4;
+    border: 1px solid rgba(231, 216, 202, 0.16);
+    border-radius: 16px;
+    box-shadow: 0 16px 36px rgba(36, 23, 17, 0.18);
+  }
+
+  .chrome {
+    background: #3a2418;
+    color: #faf8f4;
+  }
+
+  .panel-floating .btn-ghost {
+    color: #e4d3c4;
+  }
+  .panel-floating .btn-ghost:hover {
+    background: rgba(250, 248, 244, 0.08);
+    color: #faf8f4;
+  }
+
+  .field-label {
+    display: block;
+    font-size: 13px;
+    font-weight: 500;
+    color: var(--color-text-secondary);
+    margin-bottom: 6px;
+  }
+  .field-input {
+    width: 100%;
+    padding: 10px 12px;
+    font-size: 14px;
+    color: #241711;
+    background: #ffffff;
+    border: 1px solid #e7d8ca;
+    border-radius: 8px;
+    transition: border-color 0.15s ease, box-shadow 0.15s ease;
+  }
+  .field-input::placeholder {
+    color: #7a675c;
+    opacity: 1;
+  }
+  .field-input:focus {
+    outline: none;
+    border-color: #b87333;
+    box-shadow: 0 0 0 3px rgba(184, 115, 51, 0.2);
+  }
+  select.field-input option {
+    background: #ffffff;
+    color: #241711;
+  }
+
+  .badge {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    padding: 2px 10px;
+    border-radius: 9999px;
+    font-size: 12px;
+    font-weight: 600;
+    background: rgba(184, 115, 51, 0.12);
+    color: #9a5f2a;
+  }
+  .badge-success {
+    background: rgba(184, 115, 51, 0.14);
+    color: #8f5626;
+  }
+  .badge-danger {
+    background: rgba(214, 74, 69, 0.12);
+    color: #c73e3a;
+  }
+  .badge-premium {
+    background: rgba(217, 154, 91, 0.2);
+    color: #8f5626;
+  }
+
+  .panel-floating .badge,
+  .chrome .badge {
+    background: rgba(217, 154, 91, 0.16);
+    color: #f3d7b5;
+  }
+  .panel-floating .badge-danger,
+  .chrome .badge-danger {
+    background: rgba(240, 138, 138, 0.16);
+    color: #f08a8a;
+  }
+}
+
+/* ===================== React Flow — canvas claro ===================== */
+.react-flow {
+  background: #faf8f4;
+}
+.react-flow__node {
+  cursor: grab;
+}
+.react-flow__node:focus,
+.react-flow__node:focus-visible {
+  outline: none;
+}
+.react-flow__node.selected {
+  cursor: grabbing;
+}
+.react-flow__handle {
+  width: 10px;
+  height: 10px;
+  background: #b87333;
+  border: 2px solid #ffffff;
+  box-shadow: 0 0 0 1px #e7d8ca;
+}
+.react-flow__node.selected .react-flow__handle {
+  background: #d64a45;
+  box-shadow: 0 0 0 1px #d64a45;
+}
+.react-flow__edge .react-flow__edge-path {
+  stroke: #d4c4b4;
+  stroke-width: 1.75;
+}
+.react-flow__edge:hover .react-flow__edge-path {
+  stroke: #b87333;
+}
+.react-flow__edge.selected .react-flow__edge-path,
+.react-flow__edge:focus .react-flow__edge-path,
+.react-flow__edge:focus-visible .react-flow__edge-path,
+.react-flow__edge.updating .react-flow__edge-path {
+  stroke: #d64a45;
+  stroke-width: 2.25;
+}
+.react-flow__connection-path {
+  stroke: #b87333;
+  stroke-width: 1.75;
+}
+.react-flow__edge-text {
+  fill: #241711;
+  font-size: 11px;
+}
+.react-flow__edge-textbg {
+  fill: #ffffff;
+}
+.react-flow__selection,
+.react-flow__nodesselection-rect {
+  background: rgba(214, 74, 69, 0.08);
+  border: 1px solid rgba(214, 74, 69, 0.55);
+}
+.react-flow__controls {
+  box-shadow: var(--shadow-soft);
+  border: 1px solid #e7d8ca;
+  border-radius: 8px;
+  overflow: hidden;
+}
+.react-flow__controls-button {
+  background: #ffffff;
+  border-bottom: 1px solid #e7d8ca;
+  color: #3a2418;
+  fill: #3a2418;
+}
+.react-flow__controls-button:hover {
+  background: #faf8f4;
+}
+.react-flow__minimap {
+  background: #ffffff !important;
+  border: 1px solid #e7d8ca;
+  border-radius: 8px;
+  box-shadow: var(--shadow-soft);
+}
+.react-flow__attribution {
+  background: transparent;
+  color: #6e5c4c;
+}
+.react-flow__background {
+  background-color: #faf8f4;
 }

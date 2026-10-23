@@ -21,6 +21,7 @@ export interface VideoMetadata {
     fps: number;
     codec: string;
     bitrate: number;
+    hasAudio: boolean;
 }
 
 export interface HLSVariant {
@@ -33,6 +34,16 @@ export interface HLSOutput {
     masterPlaylist: string;
     variants: HLSVariant[];
     thumbnailUrl: string;
+}
+
+/**
+ * Parse do frame rate emitido pelo ffprobe (ex.: "30/1", "30000/1001", "30")
+ */
+function parseFps(rate: string | undefined): number {
+    if (!rate) return 24;
+    const [num, den] = rate.split('/').map(Number);
+    if (!num) return 24;
+    return den ? num / den : num;
 }
 
 /**
@@ -67,6 +78,7 @@ export async function getVideoMetadata(inputPath: string): Promise<VideoMetadata
             try {
                 const data = JSON.parse(stdout);
                 const videoStream = data.streams.find((s: any) => s.codec_type === 'video');
+                const audioStream = data.streams.find((s: any) => s.codec_type === 'audio');
 
                 if (!videoStream) {
                     return reject(new Error('No video stream found'));
@@ -76,9 +88,10 @@ export async function getVideoMetadata(inputPath: string): Promise<VideoMetadata
                     width: videoStream.width,
                     height: videoStream.height,
                     duration: parseFloat(data.format.duration),
-                    fps: eval(videoStream.r_frame_rate) || 24,
+                    fps: parseFps(videoStream.r_frame_rate),
                     codec: videoStream.codec_name,
-                    bitrate: parseInt(data.format.bit_rate) || 0
+                    bitrate: parseInt(data.format.bit_rate) || 0,
+                    hasAudio: Boolean(audioStream),
                 };
 
                 resolve(metadata);
@@ -128,48 +141,48 @@ async function processResolution(
     console.log(`\n🔄 Processando ${resolution.name} (${resolution.width}x${resolution.height})...`);
 
     return new Promise((resolve, reject) => {
-        const args = [
-            '-i', inputPath,
+        const vf = `scale=${resolution.width}:${resolution.height}:force_original_aspect_ratio=decrease,pad=${resolution.width}:${resolution.height}:(ow-iw)/2:(oh-ih)/2:black,fps=${ENCODING_PARAMS.frameRate}`;
 
+        const args: string[] = metadata.hasAudio
+            ? ['-i', inputPath, '-map', '0:v:0', '-map', '0:a:0?']
+            : [
+                '-i', inputPath,
+                '-f', 'lavfi', '-i', `anullsrc=channel_layout=stereo:sample_rate=${ENCODING_PARAMS.audioSampleRate}`,
+                '-map', '0:v:0', '-map', '1:a:0',
+                '-shortest',
+            ];
+
+        args.push(
             // ✅ VÍDEO: Parâmetros normalizados para stitching
             '-c:v', ENCODING_PARAMS.videoCodec,
             '-profile:v', ENCODING_PARAMS.profile,
             '-level', ENCODING_PARAMS.level,
             '-preset', ENCODING_PARAMS.preset,
             '-pix_fmt', ENCODING_PARAMS.pixelFormat,
-
-            // ✅ CRÍTICO: Frame rate fixo para compatibilidade de stitching
             '-r', String(ENCODING_PARAMS.frameRate),
-
-            // Scale com padding para manter aspect ratio
-            '-vf', `scale=${resolution.width}:${resolution.height}:force_original_aspect_ratio=decrease,pad=${resolution.width}:${resolution.height}:(ow-iw)/2:(oh-ih)/2:black,fps=${ENCODING_PARAMS.frameRate}`,
-
-            // Bitrate settings
+            '-vf', vf,
             '-b:v', resolution.videoBitrate,
             '-maxrate', resolution.videoBitrate,
             '-bufsize', `${parseInt(resolution.videoBitrate) * 2}k`,
-
-            // ✅ GOP (Group of Pictures) fixo para keyframes consistentes - CRÍTICO
             '-g', String(ENCODING_PARAMS.gopSize),
             '-keyint_min', String(ENCODING_PARAMS.keyintMin),
             '-sc_threshold', String(ENCODING_PARAMS.sceneChangeThreshold),
-
-            // ✅ ÁUDIO: Parâmetros normalizados
             '-c:a', ENCODING_PARAMS.audioCodec,
             '-b:a', resolution.audioBitrate,
             '-ac', String(ENCODING_PARAMS.audioChannels),
             '-ar', String(ENCODING_PARAMS.audioSampleRate),
-
-            // ✅ HLS: Configurações fixas para compatibilidade com stitching
             '-f', 'hls',
             '-hls_time', String(ENCODING_PARAMS.segmentDuration),
             '-hls_playlist_type', ENCODING_PARAMS.hlsPlaylistType,
             '-hls_segment_type', ENCODING_PARAMS.hlsSegmentType,
             '-hls_flags', ENCODING_PARAMS.hlsFlags,
             '-hls_segment_filename', path.join(outputDir, `${variantName}_%03d.ts`),
-
             playlistPath
-        ];
+        );
+
+        if (!metadata.hasAudio) {
+            console.log(`  🔇 Sem faixa de áudio — gerando áudio silencioso estéreo ${ENCODING_PARAMS.audioSampleRate}Hz`);
+        }
 
         console.log(`  🎥 FFmpeg args: -r ${ENCODING_PARAMS.frameRate} -vf "...fps=${ENCODING_PARAMS.frameRate}" ...`);
 

@@ -1,20 +1,17 @@
 export const dom = {
-    // Containers
-    projectSelector: document.getElementById('project-selector')!,
+    landingPanel: document.getElementById('landing-panel')!,
+    loadingPanel: document.getElementById('loading-panel')!,
+    errorPanel: document.getElementById('error-panel')!,
+    errorMessage: document.getElementById('error-message')!,
+
     playerContainer: document.getElementById('player-container')!,
 
-    // Project selection
-    projectList: document.getElementById('project-list') as HTMLSelectElement,
-    loadProjectBtn: document.getElementById('load-project')!,
-
-    // ✅ NOVO: Header e botão de voltar
+    playerHeader: document.getElementById('player-header')!,
+    videoWrapper: document.getElementById('video-wrapper')!,
     backToHomeBtn: document.getElementById('back-to-home-btn')!,
-    projectTitle: document.getElementById('project-title')!,
 
-    // Video
     video: document.getElementById('video-player') as HTMLVideoElement,
 
-    // Overlays
     choicesOverlay: document.getElementById('choices-overlay')!,
     choicesTitle: document.getElementById('choices-title')!,
     choicesButtons: document.getElementById('choices-buttons')!,
@@ -26,13 +23,12 @@ export const dom = {
     endMessage: document.getElementById('end-message')!,
     restartButton: document.getElementById('restart-button')!,
 
-    // Info
     currentNodeSpan: document.getElementById('current-node')!,
     pathHistorySpan: document.getElementById('path-history')!,
 
-    // Controls
     customControls: document.getElementById('custom-controls')!,
     progressBar: document.getElementById('progress-bar')!,
+    progressAvailable: document.getElementById('progress-available')!,
     progressFilled: document.getElementById('progress-filled')!,
     progressHandle: document.getElementById('progress-handle')!,
     currentTimeSpan: document.getElementById('current-time')!,
@@ -42,9 +38,10 @@ export const dom = {
     muteBtn: document.getElementById('mute-btn')!,
     volumeSlider: document.getElementById('volume-slider') as HTMLInputElement,
     fullscreenBtn: document.getElementById('fullscreen-btn')!,
-    reloadProjectListBtn: document.getElementById('refresh-projects')!,
 
-    // ✅ NOVO: Controle de velocidade
     speedBtn: document.getElementById('speed-btn')!,
     speedMenu: document.getElementById('speed-menu')!,
+
+    qualityBtn: document.getElementById('quality-btn')!,
+    qualityMenu: document.getElementById('quality-menu')!,
 };

@@ -1,4 +1,7 @@
-export const API_URL = 'http://localhost:3001';
+export const API_URL =
+    typeof import.meta !== 'undefined' && import.meta.env?.VITE_API_URL
+        ? String(import.meta.env.VITE_API_URL)
+        : 'http://localhost:3001';
 
 /**
  * ✅ CONFIGURAÇÕES HLS.js OTIMIZADAS
@@ -95,3 +98,10 @@ export const TRANSITION_CONFIG = {
     fadeDuration: 300, // ms
     fadeEasing: 'ease',
 };
+
+/** Segundos antes do fim do segmento para anexar o próximo trecho HLS (prefetch). */
+export const STITCHED_PREFETCH_LEAD_SEC = 3;
+/** Segundos antes do fim para fazer seek ao próximo segmento (evita stall no fim). */
+export const STITCHED_TRANSITION_LEAD_SEC = 1;
+/** Tempo mínimo reproduzido num segmento antes de permitir transição antecipada. */
+export const STITCHED_MIN_PLAY_BEFORE_TRANSITION_SEC = 2;

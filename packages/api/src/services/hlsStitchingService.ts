@@ -40,6 +40,16 @@ async function parsePlaylist(playlistPath: string): Promise<string[]> {
 }
 
 /**
+ * Detectar as resoluções disponíveis (playlists) de um diretório de vídeo
+ */
+async function detectResolutions(videoDir: string): Promise<string[]> {
+    const files = await fs.readdir(videoDir);
+    return files
+        .map(f => f.match(/_(360p|480p|720p|1080p)\.m3u8$/)?.[1])
+        .filter((r): r is string => Boolean(r));
+}
+
+/**
  * ✅ Criar playlist concatenada com EXT-X-DISCONTINUITY para compatibilidade entre vídeos
  */
 async function createStitchedPlaylist(
@@ -78,8 +88,7 @@ async function createStitchedPlaylist(
             await fs.access(originalPlaylistPath);
             console.log(`    ✅ Playlist encontrada`);
         } catch {
-            console.warn(`    ⚠️ Playlist não encontrada: ${originalPlaylistPath}`);
-            continue;
+            throw new Error(`Playlist não encontrada: ${originalPlaylistPath}`);
         }
 
         // ✅ CORREÇÃO: DISCONTINUITY apenas ENTRE vídeos (não no início, não duplicado)
@@ -147,23 +156,22 @@ async function createStitchedMasterPlaylist(
 
     console.log(`📂 Diretório stitched criado: ${stitchDir}`);
 
-    // Detectar resoluções disponíveis no primeiro vídeo
-    const firstVideoId = videoSegments[0].videoId;
-    const firstVideoDir = path.join(baseHlsPath, firstVideoId);
+    // Detectar resoluções comuns a TODOS os vídeos do path (interseção)
+    let resolutions: string[] | null = null;
+    for (const segment of videoSegments) {
+        const videoDir = path.join(baseHlsPath, segment.videoId);
+        const available = await detectResolutions(videoDir);
+        resolutions = resolutions === null
+            ? available
+            : resolutions.filter(r => available.includes(r));
+    }
 
-    const files = await fs.readdir(firstVideoDir);
-    const resolutions = files
-        .filter(f => f.endsWith('.m3u8') && !f.includes('_thumb') && f.includes('_'))
-        .map(f => {
-            const match = f.match(/_(360p|480p|720p|1080p)\.m3u8/);
-            return match ? match[1] : null;
-        })
-        .filter(Boolean) as string[];
+    console.log(`📊 Resoluções comuns detectadas: ${resolutions?.join(', ') ?? '(nenhuma)'}`);
 
-    console.log(`📊 Resoluções detectadas: ${resolutions.join(', ')}`);
-
-    if (resolutions.length === 0) {
-        throw new Error(`Nenhuma resolução encontrada para o vídeo ${firstVideoId}`);
+    if (!resolutions || resolutions.length === 0) {
+        throw new Error(
+            `Nenhuma resolução comum entre os vídeos do path. Stitching abortado.`
+        );
     }
 
     // Criar variant playlists para cada resolução

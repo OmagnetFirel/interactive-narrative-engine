@@ -1,5 +1,6 @@
 import { useState, useRef } from 'react';
 import { uploadVideo, processVideo, waitForProcessing, type VideoStatus } from '../../services/videoApi';
+import { MEDIA_URL } from '../../services/api';
 
 interface VideoUploadModalProps {
   isOpen: boolean;
@@ -76,7 +77,7 @@ export function VideoUploadModal({ isOpen, onClose, onVideoReady }: VideoUploadM
       if (finalStatus.hlsUrl) {
         setProcessingStatus('Concluído!');
         onVideoReady(
-          `http://localhost:3001${finalStatus.hlsUrl}`,
+          `${MEDIA_URL}${finalStatus.hlsUrl}`,
           videoId,
           metadata
         );
@@ -113,17 +114,17 @@ export function VideoUploadModal({ isOpen, onClose, onVideoReady }: VideoUploadM
   };
 
   return (
-    <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
-      <div className="bg-white rounded-xl shadow-2xl w-full max-w-lg mx-4">
+    <div className="fixed inset-0 bg-ink/45 flex items-center justify-center z-50">
+      <div className="bg-surface border border-border rounded-[20px] shadow-soft w-full max-w-lg mx-4">
         {/* Header */}
-        <div className="px-6 py-4 border-b border-gray-200 flex items-center justify-between">
-          <h2 className="text-xl font-semibold text-gray-900">
+        <div className="px-6 py-4 border-b border-border flex items-center justify-between">
+          <h2 className="text-xl font-semibold text-text">
             📹 Upload de Vídeo
           </h2>
           <button
             onClick={handleClose}
             disabled={isUploading || isProcessing}
-            className="text-gray-400 hover:text-gray-600 transition-colors disabled:opacity-50"
+            className="text-text-secondary hover:text-text transition-colors disabled:opacity-50"
           >
             ✕
           </button>
@@ -135,13 +136,13 @@ export function VideoUploadModal({ isOpen, onClose, onVideoReady }: VideoUploadM
           {!file && (
             <div
               onClick={() => fileInputRef.current?.click()}
-              className="border-2 border-dashed border-gray-300 rounded-lg p-8 text-center cursor-pointer hover:border-blue-500 hover:bg-blue-50 transition-all"
+              className="border-2 border-dashed border-border rounded-lg p-8 text-center cursor-pointer hover:border-copper hover:bg-copper/5 transition-all"
             >
               <div className="text-4xl mb-3">🎬</div>
-              <div className="text-sm font-medium text-gray-700 mb-1">
+              <div className="text-sm font-medium text-text mb-1">
                 Clique para selecionar um vídeo
               </div>
-              <div className="text-xs text-gray-500">
+              <div className="text-xs text-text-secondary">
                 MP4, MOV, AVI ou WebM • Máximo 500MB
               </div>
             </div>
@@ -149,20 +150,20 @@ export function VideoUploadModal({ isOpen, onClose, onVideoReady }: VideoUploadM
 
           {/* Arquivo selecionado */}
           {file && (
-            <div className="bg-blue-50 border border-blue-200 rounded-lg p-4">
+            <div className="bg-primary/5 border border-primary/20 rounded-lg p-4">
               <div className="flex items-start justify-between">
                 <div className="flex-1">
-                  <div className="font-medium text-gray-900 text-sm">
+                  <div className="font-medium text-text text-sm">
                     {file.name}
                   </div>
-                  <div className="text-xs text-gray-600 mt-1">
+                  <div className="text-xs text-text-secondary mt-1">
                     {formatFileSize(file.size)} • {file.type}
                   </div>
                 </div>
                 {!isUploading && !isProcessing && (
                   <button
                     onClick={() => setFile(null)}
-                    className="text-gray-400 hover:text-gray-600 ml-2"
+                    className="text-text-secondary hover:text-text ml-2"
                   >
                     ✕
                   </button>
@@ -175,12 +176,12 @@ export function VideoUploadModal({ isOpen, onClose, onVideoReady }: VideoUploadM
           {isUploading && (
             <div className="space-y-2">
               <div className="flex items-center justify-between text-sm">
-                <span className="text-gray-700 font-medium">Enviando...</span>
-                <span className="text-blue-600 font-semibold">{uploadProgress}%</span>
+                <span className="text-text font-medium">Enviando...</span>
+                <span className="text-primary font-semibold tabular-nums">{uploadProgress}%</span>
               </div>
-              <div className="w-full bg-gray-200 rounded-full h-2 overflow-hidden">
+              <div className="w-full bg-surface-hover rounded-full h-2 overflow-hidden">
                 <div
-                  className="bg-blue-600 h-full transition-all duration-300"
+                  className="h-full transition-all duration-300 bg-copper"
                   style={{ width: `${uploadProgress}%` }}
                 />
               </div>
@@ -190,18 +191,18 @@ export function VideoUploadModal({ isOpen, onClose, onVideoReady }: VideoUploadM
           {/* Status de Processamento */}
           {isProcessing && (
             <div className="space-y-3">
-              <div className="flex items-center gap-3 p-4 bg-purple-50 border border-purple-200 rounded-lg">
+              <div className="flex items-center gap-3 p-4 bg-primary/5 border border-primary/20 rounded-lg">
                 <div className="animate-spin text-2xl">⚙️</div>
                 <div className="flex-1">
-                  <div className="text-sm font-medium text-gray-900">
+                  <div className="text-sm font-medium text-text">
                     Processando HLS
                   </div>
-                  <div className="text-xs text-gray-600 mt-1">
+                  <div className="text-xs text-text-secondary mt-1">
                     {processingStatus}
                   </div>
                 </div>
               </div>
-              <div className="text-xs text-gray-500 text-center">
+              <div className="text-xs text-text-secondary text-center">
                 Isso pode levar alguns minutos dependendo do tamanho do vídeo
               </div>
             </div>
@@ -209,10 +210,10 @@ export function VideoUploadModal({ isOpen, onClose, onVideoReady }: VideoUploadM
 
           {/* Erro */}
           {error && (
-            <div className="p-4 bg-red-50 border border-red-200 rounded-lg">
+            <div className="p-4 bg-danger/10 border border-danger/30 rounded-lg">
               <div className="flex items-start gap-2">
-                <span className="text-red-600">⚠️</span>
-                <div className="flex-1 text-sm text-red-700">
+                <span className="text-danger">⚠️</span>
+                <div className="flex-1 text-sm text-danger">
                   {error}
                 </div>
               </div>
@@ -229,18 +230,18 @@ export function VideoUploadModal({ isOpen, onClose, onVideoReady }: VideoUploadM
         </div>
 
         {/* Footer */}
-        <div className="px-6 py-4 border-t border-gray-200 flex items-center justify-end gap-3">
+        <div className="px-6 py-4 border-t border-border flex items-center justify-end gap-3">
           <button
             onClick={handleClose}
             disabled={isUploading || isProcessing}
-            className="px-4 py-2 text-sm font-medium text-gray-700 hover:bg-gray-100 rounded-lg transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+            className="btn-ghost disabled:opacity-50 disabled:cursor-not-allowed"
           >
             Cancelar
           </button>
           <button
             onClick={handleUploadAndProcess}
             disabled={!file || isUploading || isProcessing}
-            className="px-4 py-2 text-sm font-medium text-white bg-blue-600 hover:bg-blue-700 rounded-lg transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2"
+            className="btn-primary disabled:opacity-50 disabled:cursor-not-allowed"
           >
             {isUploading && '⏳'}
             {isProcessing && '⚙️'}

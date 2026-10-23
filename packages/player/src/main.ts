@@ -4,114 +4,108 @@ import { dom } from './ui/dom-elements';
 import { apiService } from './services/api.service';
 import { setupCustomControls } from './controllers/controls.controller';
 import { findInitialNode, navigateToNode, handleTimeUpdate, handleVideoEnded, handleRestart } from './controllers/navigation.controller';
-import { updateVirtualProgress } from './ui/progress.ui';
-import { analytics } from './services/analytics.service';
+import { resetState } from './core/state';
+import { resetProgressDisplay, startProgressLoop, stopProgressLoop } from './ui/progress.ui';
 import { hlsService } from './services/hls.service';
 import { preloadService } from './services/preload.service';
 import { timelineService } from './services/timeline.service';
 
+type ViewState = 'landing' | 'loading' | 'error' | 'playing';
+
+let currentShareToken: string | null = null;
+
+function parseShareTokenFromPath(): string | null {
+  const parts = window.location.pathname.split('/').filter(Boolean);
+  const playIndex = parts.indexOf('play');
+  if (playIndex >= 0 && parts[playIndex + 1]) {
+    return decodeURIComponent(parts[playIndex + 1]);
+  }
+  return null;
+}
+
+function showView(view: ViewState, errorMessage?: string): void {
+  dom.landingPanel.style.display = view === 'landing' ? 'block' : 'none';
+  dom.loadingPanel.style.display = view === 'loading' ? 'block' : 'none';
+  dom.errorPanel.style.display = view === 'error' ? 'block' : 'none';
+  dom.playerContainer.style.display = view === 'playing' ? 'block' : 'none';
+
+  if (view === 'error' && errorMessage) {
+    dom.errorMessage.textContent = errorMessage;
+  }
+}
+
+async function startProject(graph: Awaited<ReturnType<typeof apiService.getProjectByShareToken>>): Promise<void> {
+  state.currentGraph = graph;
+
+  const initialNode = findInitialNode(state.currentGraph);
+  if (!initialNode) {
+    showView('error', 'Nenhum nó inicial encontrado nesta narrativa.');
+    return;
+  }
+
+  showView('playing');
+  state.pathHistory = [];
+  preloadService.clearAll();
+  navigateToNode(initialNode);
+}
+
+async function loadProjectByShareToken(token: string): Promise<void> {
+  currentShareToken = token;
+  showView('loading');
+
+  try {
+    const graph = await apiService.getProjectByShareToken(token);
+    console.log('📊 Projeto carregado via share token:', graph.name);
+    await startProject(graph);
+  } catch (error: unknown) {
+    console.error('❌ Erro ao carregar projeto:', error);
+    const is404 = axiosIs404(error);
+    showView(
+      'error',
+      is404
+        ? 'Link inválido ou projeto não encontrado.'
+        : 'Não foi possível carregar a narrativa. Tente novamente mais tarde.'
+    );
+  }
+}
+
+function axiosIs404(error: unknown): boolean {
+  return (
+    typeof error === 'object' &&
+    error !== null &&
+    'response' in error &&
+    (error as { response?: { status?: number } }).response?.status === 404
+  );
+}
+
 async function init() {
   console.log('🚀 Inicializando Interactive Narrative Player (Refatorado)');
 
-  await loadProjects();
-
-  // Event listeners
-  dom.loadProjectBtn.addEventListener('click', handleLoadProject);
   dom.restartButton.addEventListener('click', handleRestart);
   dom.video.addEventListener('timeupdate', onTimeUpdate);
   dom.video.addEventListener('ended', handleVideoEnded);
-  dom.reloadProjectListBtn.addEventListener('click', loadProjects);
-
-  // ✅ NOVO: Botão de voltar para home
   dom.backToHomeBtn.addEventListener('click', handleBackToHome);
 
-  // Setup controles customizados
   setupCustomControls();
-
-  // ✅ Inicializar HLS Service
+  startProgressLoop();
   hlsService.init();
 
-  // ✅ Adicionar painel de debug/analytics (apenas em desenvolvimento)
+  const shareToken = parseShareTokenFromPath();
+  if (shareToken) {
+    await loadProjectByShareToken(shareToken);
+  } else {
+    showView('landing');
+  }
+
   if (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1') {
     setupDebugPanel();
   }
 }
 
-async function loadProjects() {
-  try {
-    const projects = await apiService.getProjects();
-
-    dom.projectList.innerHTML = '<option value="">-- Selecione --</option>';
-
-    projects.forEach((project) => {
-      const option = document.createElement('option');
-      option.value = project.id;
-      option.textContent = `${project.name} (${project.nodes.length} nós)`;
-      dom.projectList.appendChild(option);
-    });
-
-    console.log(`✅ ${projects.length} projetos carregados`);
-  } catch (error) {
-    console.error('❌ Erro ao carregar projetos:', error);
-    alert('Erro ao conectar com a API');
-  }
-}
-
-async function handleLoadProject() {
-  const projectId = dom.projectList.value;
-
-  if (!projectId) {
-    alert('Selecione um projeto');
-    return;
-  }
-
-  try {
-    state.currentGraph = await apiService.getProject(projectId);
-
-    console.log('📊 Projeto carregado:', state.currentGraph);
-
-    const initialNode = findInitialNode(state.currentGraph);
-
-    if (!initialNode) {
-      alert('Erro: Nenhum nó inicial encontrado no projeto');
-      return;
-    }
-
-    dom.projectSelector.style.display = 'none';
-    dom.playerContainer.style.display = 'block';
-
-    state.pathHistory = [];
-
-    // ✅ Resetar analytics ao carregar novo projeto
-    analytics.reset();
-    preloadService.clearAll();
-
-    navigateToNode(initialNode);
-
-  } catch (error) {
-    console.error('❌ Erro ao carregar projeto:', error);
-    alert('Erro ao carregar projeto');
-  }
-}
-
 function onTimeUpdate() {
   handleTimeUpdate();
-
-  // ✅ NOVO: Atualizar segmento atual em modo stitched
-  if (state.stitchedPlaylistUrl && state.stitchedPath.length > 0) {
-    const currentTime = dom.video.currentTime;
-    timelineService.updateCurrentSegmentByTime(currentTime);
-  }
-
-  // Atualizar progress bar virtual
-  if (!state.isSeekingVirtual) {
-    updateVirtualProgress();
-  }
 }
 
-/**
- * ✅ Setup painel de debug/analytics
- */
 function setupDebugPanel() {
   const debugPanel = document.createElement('div');
   debugPanel.id = 'debug-panel-dev';
@@ -119,56 +113,44 @@ function setupDebugPanel() {
     position: fixed;
     top: 10px;
     right: 10px;
-    background: rgba(0, 0, 0, 0.85);
-    color: #0f0;
+    background: rgba(58, 36, 24, 0.94);
+    color: #faf8f4;
     padding: 12px;
     border-radius: 6px;
     font-family: 'Courier New', monospace;
     font-size: 11px;
     z-index: 9999;
     max-width: 280px;
-    backdrop-filter: blur(4px);
-    border: 1px solid rgba(0, 255, 0, 0.3);
+    border: 1px solid rgba(184, 115, 51, 0.45);
   `;
 
   debugPanel.innerHTML = `
-    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px; border-bottom: 1px solid rgba(0, 255, 0, 0.3); padding-bottom: 6px;">
-      <strong style="color: #0ff;">📊 DEBUG PANEL</strong>
-      <button id="toggle-debug" style="background: transparent; border: 1px solid #0f0; color: #0f0; padding: 2px 6px; cursor: pointer; border-radius: 3px; font-size: 10px;">−</button>
+    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px; border-bottom: 1px solid rgba(231, 216, 202, 0.25); padding-bottom: 6px;">
+      <strong style="color: #D99A5B;">📊 DEBUG PANEL</strong>
+      <button id="toggle-debug" style="background: transparent; border: 1px solid #D99A5B; color: #D99A5B; padding: 2px 6px; cursor: pointer; border-radius: 3px; font-size: 10px;">−</button>
     </div>
     <div id="debug-content">
       <div style="margin-bottom: 6px;">
-        <div style="color: #0ff; font-weight: bold; margin-bottom: 2px;">HLS Info:</div>
+        <div style="color: #D99A5B; font-weight: bold; margin-bottom: 2px;">HLS Info:</div>
         <div id="hls-level" style="margin-left: 8px;">Level: -</div>
         <div id="hls-bitrate" style="margin-left: 8px;">Bitrate: -</div>
       </div>
       
       <div style="margin-bottom: 6px;">
-        <div style="color: #0ff; font-weight: bold; margin-bottom: 2px;">Buffer:</div>
+        <div style="color: #D99A5B; font-weight: bold; margin-bottom: 2px;">Buffer:</div>
         <div id="buffer-length" style="margin-left: 8px;">Length: -</div>
         <div id="buffer-health" style="margin-left: 8px;">Health: -</div>
       </div>
       
       <div style="margin-bottom: 6px;">
-        <div style="color: #0ff; font-weight: bold; margin-bottom: 2px;">Preload Cache:</div>
+        <div style="color: #D99A5B; font-weight: bold; margin-bottom: 2px;">Preload Cache:</div>
         <div id="preload-status" style="margin-left: 8px;">0 / 3</div>
       </div>
-      
-      <div style="margin-bottom: 6px;">
-        <div style="color: #0ff; font-weight: bold; margin-bottom: 2px;">Analytics:</div>
-        <div id="analytics-events" style="margin-left: 8px;">Events: 0</div>
-        <div id="analytics-errors" style="margin-left: 8px;">Errors: 0</div>
-      </div>
-      
-      <button id="show-analytics-summary" style="width: 100%; margin-top: 8px; padding: 6px; background: rgba(0, 255, 0, 0.1); border: 1px solid #0f0; color: #0f0; cursor: pointer; border-radius: 3px; font-size: 10px;">
-        View Summary
-      </button>
     </div>
   `;
 
   document.body.appendChild(debugPanel);
 
-  // Toggle minimize
   let isMinimized = false;
   const toggleBtn = document.getElementById('toggle-debug')!;
   const content = document.getElementById('debug-content')!;
@@ -179,43 +161,34 @@ function setupDebugPanel() {
     toggleBtn.textContent = isMinimized ? '+' : '−';
   });
 
-  // Botão de summary
-  document.getElementById('show-analytics-summary')!.addEventListener('click', () => {
-    const summary = analytics.getSummary();
-    console.log('📊 Analytics Summary:', summary);
-    alert(JSON.stringify(summary, null, 2));
-  });
-
-  // Atualizar painel a cada 2 segundos
   setInterval(updateDebugPanel, 2000);
 }
 
-/**
- * ✅ NOVO: Voltar para seleção de projetos
- */
 function handleBackToHome() {
-  // Parar vídeo atual
   dom.video.pause();
 
-  // Limpar estado
-  analytics.flush();
   preloadService.clearAll();
   hlsService.destroy();
+  stopProgressLoop();
+  resetProgressDisplay();
+  resetState();
+  timelineService.resetTimeline();
 
-  // Voltar para seleção
-  dom.playerContainer.style.display = 'none';
-  dom.projectSelector.style.display = 'block';
+  dom.playerHeader.classList.remove('visible');
+  startProgressLoop();
 
-  console.log('🏠 Voltando para home...');
+  if (currentShareToken) {
+    void loadProjectByShareToken(currentShareToken);
+  } else {
+    showView('landing');
+  }
+
+  console.log('🏠 Voltando ao início da narrativa...');
 }
 
-/**
- * ✅ Atualizar informações do painel de debug
- */
 function updateDebugPanel() {
   const hls = hlsService.getHls();
 
-  // HLS Info
   if (hls && hls.levels && hls.levels.length > 0) {
     const levelInfo = hls.currentLevel === -1
       ? `Auto (${hls.levels[hls.loadLevel]?.height || '-'}p)`
@@ -230,29 +203,20 @@ function updateDebugPanel() {
     }
   }
 
-  // Buffer Info
   const video = dom.video;
   if (video && video.buffered.length > 0) {
     const currentTime = video.currentTime;
     const bufferEnd = video.buffered.end(video.buffered.length - 1);
-    const bufferLength = (bufferEnd - currentTime).toFixed(2);
+    const bufferLength = bufferEnd - currentTime;
 
-    document.getElementById('buffer-length')!.textContent = `Length: ${bufferLength}s`;
-
-    const bufferMetrics = analytics.getBufferMetrics();
-    const health = bufferMetrics.averageBufferLength > 2 ? '✅ Good' : '⚠️ Low';
-    document.getElementById('buffer-health')!.textContent = `Health: ${health}`;
+    document.getElementById('buffer-length')!.textContent = `Length: ${bufferLength.toFixed(2)}s`;
+    document.getElementById('buffer-health')!.textContent =
+      `Health: ${bufferLength > 2 ? '✅ Good' : '⚠️ Low'}`;
   }
 
-  // Preload Cache
   const cacheStatus = preloadService.getCacheStatus();
   document.getElementById('preload-status')!.textContent =
     `${cacheStatus.size} / ${cacheStatus.maxSize} videos`;
-
-  // Analytics
-  const summary = analytics.getSummary();
-  document.getElementById('analytics-events')!.textContent = `Events: ${summary.totalEvents}`;
-  document.getElementById('analytics-errors')!.textContent = `Errors: ${summary.errors}`;
 }
 
 init();

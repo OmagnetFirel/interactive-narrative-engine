@@ -139,11 +139,18 @@ O **Interactive Narrative Engine** é um sistema completo para criação e repro
 └────────────────────────────────────────────────────────────┘
 ```
 
-**Armazenamento em Memória:**
-```javascript
-const projects: Map<string, InteractiveGraph> = new Map();
-const videos: Map<string, VideoInfo> = new Map();
+**Persistência (atende RNF09):**
+
+Os endpoints de projetos e vídeos passam por uma camada de repositório (`packages/api/src/repositories/`) que, quando `DATABASE_URL` está definido, lê e escreve nas tabelas `projects` e `videos` do PostgreSQL (schema em `docker/init.sql`). Quando o banco não está disponível (uso de `pnpm dev` puro, sem Compose), a mesma interface cai automaticamente em um `Map` em memória — útil para iterar localmente, **mas o estado não sobrevive a reinícios da API**.
+
+```typescript
+// packages/api/src/repositories/projectsRepo.ts
+const repo = getProjectsRepository(); // 'postgres' ou 'memory'
+await repo.upsert(graph);             // INSERT ... ON CONFLICT (id) DO UPDATE
+await repo.list();                    // SELECT ... ORDER BY updated_at DESC
 ```
+
+Eventos de analítica (`analytics_events`) continuam sendo persistidos em PostgreSQL exclusivamente — não há fallback em memória, e a API responde `503` se o banco estiver indisponível.
 
 ---
 
@@ -620,7 +627,7 @@ User (Editor)
      │   └─ Check for errors (orphan nodes, no start, etc)
      │
      └─ 7. Save Project
-         └─ POST /api/projects → save to memory
+         └─ POST /api/projects → upsert em PostgreSQL (fallback in-memory sem DATABASE_URL)
 ```
 
 ### **Fluxo 2: Reprodução (Player)**
@@ -763,9 +770,9 @@ T+122s   Editor polls → receives "ready" + HLS URL
 - [ ] Analytics de sessão
 
 ### **Persistência**
-- [ ] Banco de dados (PostgreSQL/MongoDB)
-- [ ] File storage (S3/MinIO)
-- [ ] Cache de metadados
+- [x] Banco de dados PostgreSQL (projetos, vídeos e eventos de analítica, via `docker/init.sql` e camada de repositórios)
+- [ ] File storage compatível com S3/MinIO para mídia
+- [ ] Cache de metadados / fila de jobs de transcodificação
 
 ### **Features Avançadas**
 - [ ] Pré-loading de próximos vídeos

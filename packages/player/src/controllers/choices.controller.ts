@@ -4,14 +4,45 @@ import { dom } from '../ui/dom-elements';
 import { hideChoices } from '../ui/overlay.ui';
 import { timelineService } from '../services/timeline.service';
 import { hlsService } from '../services/hls.service';
-import { analytics } from '../services/analytics.service';
+import { calculateVideoPathUntilBranch } from '../utils/path.utils';
+import { debugLog, logPlayerState, logVideoElement } from '../utils/debug.util';
 
-export function showChoicesDuringVideo(edges: GraphEdge[]): void {
-    if (edges.length === 0) return;
+export function showChoicesDuringVideo(edges: GraphEdge[], decisionNode?: GraphNode): void {
+    if (edges.length <= 1) return;
+
+    const node = decisionNode ?? state.currentNode;
+    if (!node) return;
+
+    if (state.hasChosenDuringVideo && state.choiceResolvedNodeId === node.id) {
+        return;
+    }
 
     state.choicesShown = true;
+    state.currentNode = node;
 
-    console.log(`🔀 Mostrando ${edges.length} escolhas`);
+    let referenceEnd = dom.video.duration;
+    let segmentInfo: Record<string, unknown> = {};
+    if (state.stitchedPlaylistUrl && state.virtualTimeline.length > 0) {
+        const segment = state.virtualTimeline[state.currentSegmentIndex];
+        if (segment) {
+            referenceEnd = segment.startTime + segment.duration;
+            segmentInfo = {
+                segmentIndex: state.currentSegmentIndex,
+                segmentLabel: segment.node.data.label,
+                segmentStart: segment.startTime,
+                segmentMetaDuration: segment.duration,
+            };
+        }
+    }
+
+    debugLog('choice', 'Exibindo overlay de escolhas', {
+        options: edges.map(e => ({ id: e.id, label: e.label, target: e.target })),
+        currentTime: Number(dom.video.currentTime.toFixed(3)),
+        referenceEnd: Number(referenceEnd.toFixed(3)),
+        timeRemaining: Number((referenceEnd - dom.video.currentTime).toFixed(3)),
+        ...segmentInfo,
+    });
+    logPlayerState('antes das escolhas');
 
     dom.choicesButtons.innerHTML = '';
 
@@ -26,8 +57,8 @@ export function showChoicesDuringVideo(edges: GraphEdge[]): void {
     dom.choicesTitle.textContent = 'Faça sua escolha:';
     dom.choicesOverlay.classList.remove('hidden');
 
-    const timeRemaining = dom.video.duration - dom.video.currentTime;
-    const timeout = Math.min(timeRemaining - 0.5, (state.currentNode?.data as any)?.timeout || timeRemaining);
+    const timeRemaining = referenceEnd - dom.video.currentTime;
+    const timeout = Math.min(timeRemaining - 0.5, (node.data as { timeout?: number })?.timeout || timeRemaining);
 
     if (timeout > 0) {
         startTimeoutDuringVideo(timeout, edges[0]);
@@ -54,9 +85,21 @@ function startTimeoutDuringVideo(seconds: number, defaultEdge: GraphEdge): void 
  * ✅ NOVO: Estilo Netflix Bandersnatch - expandir timeline sem interrupção
  */
 async function handleChoiceDuringVideo(edge: GraphEdge): Promise<void> {
-    console.log(`\n✅ ===== ESCOLHA FEITA: ${edge.label || edge.id} =====`);
+    debugLog('choice', 'Escolha confirmada', {
+        edgeId: edge.id,
+        label: edge.label,
+        target: edge.target,
+        fromNodeId: state.currentNode?.id,
+        fromNodeLabel: state.currentNode?.data.label,
+        videoTime: Number(dom.video.currentTime.toFixed(3)),
+        sessionId: state.sessionId,
+    });
+    logVideoElement('no clique da escolha');
+    logPlayerState('no clique da escolha');
 
     state.hasChosenDuringVideo = true;
+    state.choiceResolvedNodeId = state.currentNode?.id ?? edge.source;
+    state.choicesShown = false;
     hideChoices();
 
     // Limpar timeout se existir
@@ -65,94 +108,49 @@ async function handleChoiceDuringVideo(edge: GraphEdge): Promise<void> {
         state.timeoutId = null;
     }
 
-    // ✅ Rastrear escolha no analytics
-    analytics.track({
-        type: 'choice',
-        choiceId: edge.id,
-        nodeId: state.currentNode?.id,
-        metadata: {
-            choiceLabel: edge.label,
-            targetNode: edge.target,
-            wasAutomatic: false
-        }
-    });
-
     const nextNode = state.currentGraph!.nodes.find(n => n.id === edge.target);
 
     if (!nextNode) {
-        console.error('❌ Nó alvo não encontrado:', edge.target);
+        debugLog('choice', 'ERRO: nó alvo não encontrado', { target: edge.target });
         return;
     }
 
-    console.log(`📦 Próximo nó: ${nextNode.data.label}`);
+    const pathFromChoice = calculateVideoPathUntilBranch(nextNode);
 
-    // ✅ NOVO: Calcular caminho completo a partir da escolha
-    const pathFromChoice = await calculatePathToNextChoice(nextNode);
+    debugLog('choice', 'Caminho calculado após escolha', {
+        targetNode: { id: nextNode.id, label: nextNode.data.label, type: nextNode.type },
+        pathLabels: pathFromChoice.map(n => n.data.label),
+        pathNodeIds: pathFromChoice.map(n => n.id),
+        pathLength: pathFromChoice.length,
+    });
 
     if (pathFromChoice.length === 0) {
-        console.warn('⚠️ Nenhum vídeo no caminho escolhido');
+        debugLog('choice', 'AVISO: nenhum vídeo no caminho escolhido');
         return;
     }
 
-    // ✅ NOVO: Expandir timeline dinamicamente (estilo Bandersnatch)
-    console.log(`🎬 Expandindo timeline com ${pathFromChoice.length} vídeos...`);
-
-    // Adicionar novos nós à timeline virtual
     timelineService.appendToTimeline(pathFromChoice);
 
-    // ✅ NOVO: Solicitar ao servidor para expandir a playlist HLS atual
-    await hlsService.appendToCurrentPlaylist(pathFromChoice);
+    const appendOk = await hlsService.appendToCurrentPlaylist(pathFromChoice);
 
-    // Atualizar próximo nó
-    state.nextNodeQueued = nextNode;
-
-    console.log(`✅ Timeline expandida! Reprodução continua sem interrupção.`);
-}
-
-/**
- * Calcular caminho completo até a próxima escolha ou fim
- */
-async function calculatePathToNextChoice(startNode: GraphNode): Promise<GraphNode[]> {
-    const path: GraphNode[] = [];
-    let currentNode = startNode;
-
-    const addNodeIfHasVideo = (node: GraphNode) => {
-        const videoUrl = (node.data as any).videoUrl;
-        if (videoUrl && videoUrl.trim()) {
-            console.log(`  ✅ Nó com vídeo: ${node.data.label}`);
-            path.push(node);
-        } else {
-            console.log(`  ⚠️ Nó SEM vídeo (pulando): ${node.data.label}`);
+    if (!appendOk) {
+        debugLog('choice', 'Append seamless falhou — tentando fallback stitched');
+        const rebuilt = await hlsService.fallbackRebuildStitchedPlaylist();
+        if (!rebuilt) {
+            console.error('❌ Não foi possível anexar o vídeo escolhido. Tente re-transcodificar os vídeos.');
         }
-    };
-
-    addNodeIfHasVideo(startNode);
-
-    while (currentNode && state.currentGraph) {
-        const outgoingEdges = state.currentGraph.edges.filter(edge => edge.source === currentNode.id);
-
-        if (outgoingEdges.length === 0) {
-            console.log(`  🏁 Fim do caminho (nó final ou deadlock)`);
-            break;
-        }
-
-        if (outgoingEdges.length > 1) {
-            console.log(`  🔀 Próximo ponto de escolha encontrado`);
-            break;
-        }
-
-        const nextNode = state.currentGraph.nodes.find(n => n.id === outgoingEdges[0].target);
-        if (!nextNode) break;
-
-        addNodeIfHasVideo(nextNode);
-        currentNode = nextNode;
-
-        if (currentNode.type === 'end') {
-            console.log(`  🏁 Nó final encontrado: ${currentNode.data.label}`);
-            break;
-        }
+    } else {
+        debugLog('choice', 'Append seamless OK — reprodução continua sem trocar fonte');
     }
 
-    console.log(`📦 Caminho calculado: ${path.length} nó(s) com vídeo`);
-    return path;
+    debugLog('choice', 'Append HLS concluído', {
+        success: appendOk,
+        sessionId: state.sessionId,
+        newVirtualTotal: state.virtualTotalDuration,
+        segmentCount: state.virtualTimeline.length,
+    });
+    logVideoElement('após append HLS');
+    logPlayerState('após append HLS');
+
+    state.nextNodeQueued = nextNode;
 }

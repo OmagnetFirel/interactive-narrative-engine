@@ -18,8 +18,8 @@ export interface Resolution {
 export const ENCODING_PARAMS = {
     // Vídeo
     videoCodec: 'libx264',
-    profile: 'main',         // ✅ Profile fixo para compatibilidade
-    level: '4.0',            // ✅ Level fixo
+    profile: 'baseline',     // ✅ baseline = máxima compatibilidade no MSE/stitching
+    level: '3.1',            // ✅ adequado para 640x360 @ 30fps
     preset: 'medium',        // Balanço qualidade/velocidade (fast, medium, slow)
     pixelFormat: 'yuv420p',  // ✅ Compatibilidade universal
     frameRate: 30,           // ✅ NOVO: Frame rate fixo para compatibilidade de stitching
@@ -121,16 +121,13 @@ export const UPLOAD_CONFIG = {
         'video/x-msvideo',
         'video/webm',
     ] as const,
-    tempDir: 'uploads/temp',
-    hlsDir: 'uploads/hls',
-    videosDir: 'uploads/videos',
 } as const;
 
 /**
  * Configurações de limpeza de playlists stitched
  */
 export const STITCHED_CLEANUP = {
-    maxAgeMs: 3600000, // 1 hora
+    maxAgeMs: 6 * 3600000, // 6 horas
     cleanupIntervalMs: 1800000, // 30 minutos
 } as const;
 

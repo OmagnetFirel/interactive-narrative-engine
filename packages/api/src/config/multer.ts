@@ -1,18 +1,15 @@
 import multer from 'multer';
 import path from 'path';
-import { fileURLToPath } from 'url';
 import { v4 as uuidv4 } from 'uuid';
 import { UPLOAD_CONFIG } from './constants.js';
-
-const __filename = fileURLToPath(import.meta.url);
-const __dirname = path.dirname(__filename);
+import { uploadsRoot } from './runtime.js';
 
 // Configuração de armazenamento
 const storage = multer.diskStorage({
-    destination: (req, file, cb) => {
-        cb(null, path.join(__dirname, '../../uploads/temp'));
+    destination: (_req, _file, cb) => {
+        cb(null, path.join(uploadsRoot, 'temp'));
     },
-    filename: (req, file, cb) => {
+    filename: (_req, file, cb) => {
         const uniqueId = uuidv4();
         const ext = path.extname(file.originalname);
         cb(null, `${uniqueId}${ext}`);

@@ -1,0 +1,57 @@
+# Dependencies
+node_modules
+**/node_modules
+
+# Build outputs
+dist
+build
+
+# Git
+.git
+.gitignore
+
+# IDE
+.idea
+.vscode
+*.swp
+*.swo
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Logs
+*.log
+npm-debug.log*
+pnpm-debug.log*
+
+# Environment files
+.env
+.env.local
+.env.*.local
+
+# Test coverage
+coverage
+
+# Temporary files
+*.tmp
+*.temp
+
+# Uploads (for production, mount as volume)
+packages/api/uploads/videos/*
+packages/api/uploads/hls/*
+packages/api/uploads/temp/*
+
+# Keep upload directories
+!packages/api/uploads/videos/.gitkeep
+!packages/api/uploads/hls/.gitkeep
+!packages/api/uploads/temp/.gitkeep
+
+# Documentation
+*.md
+!README.md
+
+# Docker
+Dockerfile*
+docker-compose*
+.docker

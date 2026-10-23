@@ -1,0 +1,50 @@
+{
+	admin off
+}
+
+(security_headers) {
+	header {
+		X-Content-Type-Options nosniff
+		X-Frame-Options DENY
+		Referrer-Policy strict-origin-when-cross-origin
+		-Server
+	}
+	encode zstd gzip
+}
+
+{$EDITOR_DOMAIN} {
+	import security_headers
+	reverse_proxy editor:80
+}
+
+{$PLAYER_DOMAIN} {
+	import security_headers
+	reverse_proxy player:80
+}
+
+{$API_DOMAIN} {
+	import security_headers
+
+	@mediaPaths path /hls/* /videos/*
+	respond @mediaPaths 404
+
+	reverse_proxy api:3001
+}
+
+{$UPLOAD_DOMAIN} {
+	import security_headers
+
+	handle /api/videos/upload {
+		request_body {
+			max_size 500MB
+		}
+		reverse_proxy api:3001
+	}
+
+	respond 404
+}
+
+{$MEDIA_DOMAIN} {
+	import security_headers
+	reverse_proxy media:80
+}

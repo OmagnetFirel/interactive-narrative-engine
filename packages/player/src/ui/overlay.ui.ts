@@ -14,7 +14,7 @@ export function showEndOverlay(node: GraphNode): void {
 
     dom.endIcon.textContent = icons[endingType];
     dom.endTitle.textContent = data.label || 'Fim da História';
-    dom.endMessage.textContent = data.description || data.message || 'Obrigado por jogar!';
+    dom.endMessage.textContent = data.description || data.message || 'Obrigado por assistir!!';
 
     dom.endOverlay.classList.remove('hidden');
 }
@@ -27,6 +27,7 @@ export function hideChoices(): void {
     dom.choicesOverlay.classList.add('hidden');
     dom.choicesButtons.innerHTML = '';
     dom.timeoutBar.classList.add('hidden');
+    state.choicesShown = false;
 
     if (state.timeoutId) {
         clearTimeout(state.timeoutId);

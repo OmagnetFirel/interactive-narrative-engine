@@ -1,29 +1,36 @@
 import Hls from 'hls.js';
-import { HLS_CONFIG, HLS_STITCHED_CONFIG, API_URL } from '../core/config';
+import { HLS_CONFIG, HLS_STITCHED_CONFIG } from '../core/config';
 import { dom } from '../ui/dom-elements';
 import { retryWithBackoff } from '../utils/retry.utils';
-import { analytics } from './analytics.service';
 import type { GraphNode } from '../core/types';
+import { debugLog, logVideoElement } from '../utils/debug.util';
 
 export class HlsService {
     private hls: Hls | null = null;
-    private recoveryAttempts = 0;
-    private readonly MAX_RECOVERY_ATTEMPTS = 3;
-    private bufferMonitorInterval: number | null = null;
-    private currentNodeId?: string;
 
     // ✅ NOVO: Callback para fallback quando stitching falhar
     private onStitchingFailed?: () => void;
+    private stitchingFallbackInProgress = false;
+    /** Evita fallback com reload logo após append seamless (discontinuidade HLS). */
+    private lastSeamlessAppendAt = 0;
+
+    // ✅ NOVO: Hooks públicos para UI de qualidade (sobrevivem à troca de instância de Hls)
+    private manifestParsedCallbacks: Array<(levels: Hls['levels']) => void> = [];
+    private levelSwitchedCallbacks: Array<(level: number) => void> = [];
+
+    onManifestParsed(cb: (levels: Hls['levels']) => void): void {
+        this.manifestParsedCallbacks.push(cb);
+    }
+
+    onLevelSwitched(cb: (level: number) => void): void {
+        this.levelSwitchedCallbacks.push(cb);
+    }
 
     init() {
         if (Hls.isSupported()) {
             this.createHlsInstance();
         }
 
-        // Iniciar monitoramento de buffer
-        this.startBufferMonitoring();
-
-        // Cleanup ao fechar janela
         window.addEventListener('beforeunload', () => this.destroy());
     }
 
@@ -81,48 +88,48 @@ export class HlsService {
 
             // ✅ CRÍTICO: Tratamento para bufferAppendError (codecs incompatíveis)
             if (data.details === 'bufferAppendError') {
-                console.error('⚠️ bufferAppendError: Vídeos com codecs/formatos incompatíveis');
-                console.error('💡 Solução: Re-transcodifique todos os vídeos com as mesmas configurações');
+                debugLog('hls', 'bufferAppendError — codecs incompatíveis na playlist stitched', {
+                    fatal: data.fatal,
+                    reason: data.reason,
+                    msSinceAppend: Date.now() - this.lastSeamlessAppendAt,
+                });
+                logVideoElement('no bufferAppendError');
+
+                // Logo após append seamless, tentar recovery leve antes de rebuild completo
+                if (Date.now() - this.lastSeamlessAppendAt < 4000) {
+                    debugLog('hls', 'bufferAppendError pós-append — recoverMediaError (sem reload)');
+                    this.hls?.recoverMediaError();
+                    return;
+                }
 
                 if (this.onStitchingFailed) {
-                    console.log('🔄 Ativando fallback para reprodução individual...');
                     const fallbackFn = this.onStitchingFailed;
                     this.onStitchingFailed = undefined;
                     fallbackFn();
                     return;
                 }
 
-                if (this.recoveryAttempts < this.MAX_RECOVERY_ATTEMPTS) {
-                    this.hls?.recoverMediaError();
-                    this.recoveryAttempts++;
-                }
+                void this.fallbackRebuildStitchedPlaylist();
                 return;
             }
 
-            // Rastrear erro no analytics
-            analytics.track({
-                type: 'error',
-                errorCode: data.details,
-                errorMessage: data.error?.message,
-                nodeId: this.currentNodeId,
-                metadata: {
-                    fatal: data.fatal,
-                    type: data.type,
-                    level: data.level
+            // Manifest vazio/corrompido durante append EVENT — tentar recarregar antes de rebuild
+            if (data.details === 'levelLoadError' || data.details === 'manifestLoadError') {
+                if (Date.now() - this.lastSeamlessAppendAt < 8000) {
+                    debugLog('hls', `${data.details} pós-append — startLoad()`, {
+                        fatal: data.fatal,
+                    });
+                    this.hls?.startLoad(-1);
+                    return;
                 }
-            });
+            }
 
             if (data.fatal) {
                 this.handleFatalError(data);
             }
         });
 
-        // Reset recovery counter on successful playback
-        this.hls.on(Hls.Events.FRAG_LOADED, () => {
-            this.recoveryAttempts = 0;
-        });
-
-        // ✅ NOVO: Corrigir gap automaticamente quando buffer é atualizado
+        // Auto-fix: currentTime antes do buffer
         this.hls.on(Hls.Events.BUFFER_APPENDED, () => {
             // Verificar se currentTime está antes do buffer
             if (dom.video.buffered.length > 0 && !dom.video.seeking && !dom.video.paused) {
@@ -177,26 +184,23 @@ export class HlsService {
     }
 
     /**
-     * ✅ Event listeners para analytics e debug
+     * Event listeners HLS (qualidade, manifest)
      */
     private setupEventListeners(): void {
         if (!this.hls) return;
+
+        // ✅ NOVO: Notificar UI quando o manifest da instância atual for parseado
+        this.hls.on(Hls.Events.MANIFEST_PARSED, () => {
+            const levels = this.hls?.levels ?? [];
+            this.manifestParsedCallbacks.forEach(cb => cb(levels));
+        });
 
         // Rastrear mudanças de qualidade
         this.hls.on(Hls.Events.LEVEL_SWITCHED, (_event, data) => {
             const level = this.hls!.levels[data.level];
             console.log(`📊 Qualidade alterada: ${level.height}p`);
 
-            analytics.track({
-                type: 'quality_change',
-                quality: `${level.height}p`,
-                nodeId: this.currentNodeId,
-                metadata: {
-                    bitrate: level.bitrate,
-                    width: level.width,
-                    height: level.height
-                }
-            });
+            this.levelSwitchedCallbacks.forEach(cb => cb(data.level));
         });
 
         // Rastrear fragmentos carregados
@@ -217,33 +221,10 @@ export class HlsService {
     }
 
     /**
-     * ✅ BUFFER MONITORING - Monitorar continuamente
-     */
-    private startBufferMonitoring(): void {
-        // Parar monitoramento anterior
-        this.stopBufferMonitoring();
-
-        // Monitorar a cada 2 segundos
-        this.bufferMonitorInterval = window.setInterval(() => {
-            if (dom.video && !dom.video.paused) {
-                analytics.monitorBuffer(dom.video, this.currentNodeId);
-            }
-        }, 2000);
-    }
-
-    private stopBufferMonitoring(): void {
-        if (this.bufferMonitorInterval !== null) {
-            clearInterval(this.bufferMonitorInterval);
-            this.bufferMonitorInterval = null;
-        }
-    }
-
-    /**
      * ✅ RACE CONDITION FIX - Carregar vídeo com Promise e cleanup
      */
-    async loadVideo(videoUrl: string, seekToTime?: number, nodeId?: string): Promise<void> {
+    async loadVideo(videoUrl: string, seekToTime?: number): Promise<void> {
         console.log(`▶️ Reproduzindo vídeo: ${videoUrl}`);
-        this.currentNodeId = nodeId;
 
         // ✅ CORREÇÃO: Pausar e aguardar antes de destruir
         if (!dom.video.paused) {
@@ -256,7 +237,6 @@ export class HlsService {
             await retryWithBackoff(async () => {
                 // Destruir instância anterior (evita race condition)
                 this.destroyHls();
-                this.recoveryAttempts = 0;
 
                 // Criar nova instância
                 this.createHlsInstance();
@@ -317,12 +297,6 @@ export class HlsService {
                 setTimeout(() => {
                     dom.video.classList.remove('fading-in');
                 }, 400);
-
-                // Rastrear reprodução
-                analytics.track({
-                    type: 'play',
-                    nodeId: this.currentNodeId
-                });
             }, {
                 maxAttempts: 3,
                 baseDelay: 1000,
@@ -413,7 +387,6 @@ export class HlsService {
                 await retryWithBackoff(async () => {
                     // Destruir instância anterior
                     this.destroyHls();
-                    this.recoveryAttempts = 0;
 
                     // Criar nova instância com config stitched
                     this.hls = new Hls(HLS_STITCHED_CONFIG);
@@ -505,12 +478,6 @@ export class HlsService {
 
                     // ✅ Limpar callback de fallback após sucesso
                     this.onStitchingFailed = undefined;
-
-                    // Rastrear stitching
-                    analytics.track({
-                        type: 'stitch',
-                        metadata: { playlistUrl }
-                    });
                 }, {
                     maxAttempts: 2,
                     baseDelay: 1000
@@ -518,11 +485,6 @@ export class HlsService {
 
             } catch (error) {
                 console.error('❌ Erro fatal em playlist stitched, usando fallback');
-                analytics.track({
-                    type: 'error',
-                    errorCode: 'stitched_failed',
-                    errorMessage: (error as Error).message
-                });
                 onError?.();
             }
         } else if (dom.video.canPlayType('application/vnd.apple.mpegurl')) {
@@ -554,11 +516,196 @@ export class HlsService {
     }
 
     /**
-     * ✅ NOVO: Expandir playlist atual com novos vídeos (estilo Bandersnatch)
-     * Adiciona segmentos à playlist SEM interromper a reprodução
+     * ✅ SEAMLESS (Opção A): expandir a reprodução SEM recarregar a fonte.
+     *
+     * Se já existe uma sessão de playback, apenas pedimos ao servidor para anexar
+     * os novos vídeos à playlist EVENT (URL estável). O hls.js recarrega só o
+     * manifesto e faz append dos fragmentos no mesmo buffer — sem loadSource, sem
+     * piscada, sem re-seek. Caso ainda não exista sessão (ex.: começou como vídeo
+     * único), criamos uma agora (esse primeiro carregamento ainda troca a fonte,
+     * mas todas as escolhas seguintes passam a ser seamless).
      */
     async appendToCurrentPlaylist(nodePath: GraphNode[]): Promise<boolean> {
-        console.log(`\n🎬 ===== EXPANDINDO PLAYLIST ATUAL =====`);
+        console.log(`\n🎬 ===== EXPANDINDO REPRODUÇÃO =====`);
+
+        if (nodePath.length === 0) {
+            console.warn('⚠️ Nenhum nó para adicionar');
+            return false;
+        }
+
+        const { state } = await import('../core/state');
+        const { extractVideoId } = await import('../utils/format.utils');
+        const { apiService } = await import('./api.service');
+
+        const videoIds: string[] = [];
+        for (const node of nodePath) {
+            const videoUrl = (node.data as any).videoUrl;
+            if (videoUrl) {
+                const videoId = extractVideoId(videoUrl);
+                if (videoId) videoIds.push(videoId);
+            }
+        }
+
+        if (videoIds.length === 0) {
+            console.warn('⚠️ Nenhum videoId válido encontrado');
+            return false;
+        }
+
+        // ✅ Caminho seamless: já temos sessão → append sem reload
+        if (state.sessionId) {
+            const result = await apiService.appendToSession(state.sessionId, videoIds);
+            if (result.ok) {
+                // Obs.: state.stitchedPath/virtualTimeline já foram estendidos por
+                // timelineService.appendToTimeline antes desta chamada.
+                this.lastSeamlessAppendAt = Date.now();
+                console.log(`✅ Anexado à sessão (seamless, sem reload). hls.js (EVENT) vai assimilar os novos segmentos.`);
+
+                await this.refreshEventPlaylist();
+                const nextSegStart = state.virtualTimeline[state.currentSegmentIndex + 1]?.startTime;
+                if (nextSegStart !== undefined) {
+                    await this.waitUntilBuffered(nextSegStart + 0.05, 12000);
+                }
+
+                if (dom.video.paused) {
+                    await dom.video.play().catch(() => { });
+                }
+                return true;
+            }
+            console.warn(`⚠️ Append de sessão falhou (status ${result.status}), usando fallback de stitching com reload.`);
+            if (result.status === 422 || result.status === 409) {
+                console.error('❌ Vídeos incompatíveis ou resolução divergente — execute POST /api/videos/retranscode-all');
+                return false;
+            }
+            return this.appendViaStitch(nodePath);
+        }
+
+        // ✅ Ainda não há sessão: criar uma com [vídeo atual + novos] e carregar 1x.
+        const currentVideoUrl = (state.currentNode?.data as any)?.videoUrl;
+        const allVideoIds: string[] = [];
+        if (currentVideoUrl) {
+            const currentVideoId = extractVideoId(currentVideoUrl);
+            if (currentVideoId) allVideoIds.push(currentVideoId);
+        }
+        allVideoIds.push(...videoIds);
+
+        const session = await apiService.createSession(allVideoIds);
+        if (session) {
+            state.sessionId = session.sessionId;
+            state.stitchedPlaylistUrl = session.masterPlaylistUrl;
+
+            if (state.currentNode && !state.stitchedPath.find(n => n.id === state.currentNode!.id)) {
+                state.stitchedPath = [state.currentNode, ...nodePath];
+            } else {
+                state.stitchedPath = [...state.stitchedPath, ...nodePath];
+            }
+
+            const currentTime = dom.video.currentTime;
+            const wasPlaying = !dom.video.paused;
+            await this.loadStitchedPlaylistSeamless(session.masterPlaylistUrl, currentTime);
+            if (wasPlaying && dom.video.paused) {
+                await dom.video.play().catch(() => { });
+            }
+            console.log(`✅ Sessão criada e carregada. Próximas escolhas serão seamless.`);
+            return true;
+        }
+
+        console.warn('⚠️ Falha ao criar sessão, usando fallback de stitching com reload.');
+        return this.appendViaStitch(nodePath);
+    }
+
+    /**
+     * Força o hls.js a recarregar o manifesto EVENT (após append na sessão).
+     */
+    async refreshEventPlaylist(): Promise<void> {
+        if (!this.hls) return;
+        debugLog('hls', 'Recarregando manifesto EVENT após append');
+        this.hls.startLoad(-1);
+        await new Promise((resolve) => setTimeout(resolve, 350));
+    }
+
+    /**
+     * Aguarda o buffer cobrir um instante da timeline (ex.: início do próximo segmento).
+     */
+    async waitUntilBuffered(targetTime: number, timeoutMs = 8000): Promise<boolean> {
+        const start = Date.now();
+
+        while (Date.now() - start < timeoutMs) {
+            if (this.isTimeBuffered(targetTime)) {
+                debugLog('hls', 'Buffer pronto para seek', { targetTime: Number(targetTime.toFixed(3)) });
+                return true;
+            }
+            this.hls?.startLoad(-1);
+            await new Promise((resolve) => setTimeout(resolve, 250));
+        }
+
+        debugLog('hls', 'Timeout aguardando buffer', { targetTime: Number(targetTime.toFixed(3)) });
+        return false;
+    }
+
+    private isTimeBuffered(targetTime: number): boolean {
+        const video = dom.video;
+        for (let i = 0; i < video.buffered.length; i++) {
+            if (targetTime >= video.buffered.start(i) && targetTime <= video.buffered.end(i) + 0.15) {
+                return true;
+            }
+        }
+        if (video.buffered.length > 0) {
+            const bufferEnd = video.buffered.end(video.buffered.length - 1);
+            if (targetTime >= bufferEnd - 0.3 && targetTime <= bufferEnd + 2) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    /**
+     * ✅ Encerrar a sessão de playback no servidor (escreve ENDLIST) para que a
+     * playlist EVENT vire VOD e o vídeo dispare 'ended' normalmente no fim.
+     */
+    async endSession(): Promise<void> {
+        const { state } = await import('../core/state');
+        if (!state.sessionId) return;
+        const { apiService } = await import('./api.service');
+        await apiService.endSession(state.sessionId);
+        console.log(`🔚 Sessão ${state.sessionId} encerrada (ENDLIST).`);
+    }
+
+    /**
+     * Fallback: reconstrói playlist stitched quando append seamless falha (bufferAppendError).
+     */
+    async fallbackRebuildStitchedPlaylist(): Promise<boolean> {
+        if (this.stitchingFallbackInProgress) return false;
+        this.stitchingFallbackInProgress = true;
+
+        try {
+            const { state } = await import('../core/state');
+            if (state.stitchedPath.length < 1) return false;
+
+            debugLog('hls', 'Reconstruindo playlist stitched (fallback pós bufferAppendError)', {
+                nodes: state.stitchedPath.map((n) => n.data.label),
+            });
+
+            state.sessionId = null;
+            state.stitchedPlaylistUrl = null;
+            const wasPlaying = !dom.video.paused;
+            const ok = await this.appendViaStitch([...state.stitchedPath]);
+
+            if (ok && wasPlaying && dom.video.paused) {
+                await dom.video.play().catch(() => {});
+            }
+
+            return ok;
+        } finally {
+            this.stitchingFallbackInProgress = false;
+        }
+    }
+
+    /**
+     * ⚠️ LEGADO (fallback): expandir gerando uma nova master playlist e recarregando
+     * a fonte (causa a "piscada"). Usado apenas quando a sessão seamless falha.
+     */
+    private async appendViaStitch(nodePath: GraphNode[]): Promise<boolean> {
+        console.log(`\n🎬 ===== EXPANDINDO PLAYLIST (LEGADO/RELOAD) =====`);
 
         if (nodePath.length === 0) {
             console.warn('⚠️ Nenhum nó para adicionar');
@@ -568,6 +715,7 @@ export class HlsService {
         try {
             // Importar state dinamicamente para evitar circular dependency
             const { state } = await import('../core/state');
+            const { apiService } = await import('./api.service');
 
             // Extrair videoIds dos nós
             const { extractVideoId } = await import('../utils/format.utils');
@@ -607,18 +755,8 @@ export class HlsService {
                 allVideoIds.push(...videoIds);
 
                 // Criar playlist stitched completa
-                const response = await fetch(`${API_URL}/api/playlists/stitch`, {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ nodePath: allVideoIds })
-                });
-
-                if (!response.ok) {
-                    throw new Error(`Erro ao criar playlist: ${response.statusText}`);
-                }
-
-                const data = await response.json();
-                const newPlaylistUrl = data.masterPlaylistUrl;
+                const newPlaylistUrl = await apiService.stitchVideoIds(allVideoIds);
+                if (!newPlaylistUrl) throw new Error('Erro ao criar playlist autorizada');
                 state.stitchedPlaylistUrl = newPlaylistUrl;
 
                 // Combinar paths
@@ -661,21 +799,11 @@ export class HlsService {
                 }
             }
 
-            const allVideoIds = [...currentVideoIds, ...videoIds];
+            const allVideoIds = [...new Set([...currentVideoIds, ...videoIds])];
 
             // Criar nova playlist expandida
-            const response = await fetch(`${API_URL}/api/playlists/stitch`, {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ nodePath: allVideoIds })
-            });
-
-            if (!response.ok) {
-                throw new Error(`Erro ao expandir playlist: ${response.statusText}`);
-            }
-
-            const data = await response.json();
-            const newPlaylistUrl = data.masterPlaylistUrl;
+            const newPlaylistUrl = await apiService.stitchVideoIds(allVideoIds);
+            if (!newPlaylistUrl) throw new Error('Erro ao expandir playlist autorizada');
 
             // Guardar posição atual
             const currentTime = dom.video.currentTime;
@@ -721,6 +849,14 @@ export class HlsService {
             // Pausar temporariamente para evitar erros
             const wasPlaying = !dom.video.paused;
 
+            // ✅ Trocar a source no HLS recarrega o MediaSource/buffer, o que provoca
+            // uma "piscada" (frame preto + re-seek). Mascaramos isso com um fade-out
+            // curto antes de recarregar e um fade-in depois de reposicionar, para a
+            // transição parecer intencional em vez de um glitch.
+            dom.video.classList.remove('fading-in');
+            dom.video.classList.add('fading-out');
+            await new Promise(resolve => setTimeout(resolve, 200));
+
             // Carregar nova source
             this.hls.loadSource(playlistUrl);
 
@@ -744,6 +880,13 @@ export class HlsService {
             if (wasPlaying) {
                 await dom.video.play().catch(() => { });
             }
+
+            // ✅ Revelar o vídeo novamente com fade-in suave
+            dom.video.classList.remove('fading-out');
+            dom.video.classList.add('fading-in');
+            setTimeout(() => {
+                dom.video.classList.remove('fading-in');
+            }, 400);
 
             console.log(`✅ Playlist carregada, continuando em ${seekToTime.toFixed(2)}s`);
         } else {
@@ -781,7 +924,6 @@ export class HlsService {
      */
     destroy(): void {
         console.log('🗑️ Destruindo HLS Service...');
-        this.stopBufferMonitoring();
         this.destroyHls();
     }
 
@@ -807,35 +949,6 @@ export class HlsService {
                 }, 1000);
                 break;
         }
-    }
-
-    /**
-     * Mostrar erro na UI
-     */
-    private showErrorUI(message: string): void {
-        const errorDiv = document.createElement('div');
-        errorDiv.className = 'error-overlay';
-        errorDiv.style.cssText = `
-            position: fixed;
-            top: 50%;
-            left: 50%;
-            transform: translate(-50%, -50%);
-            background: rgba(255, 0, 0, 0.9);
-            color: white;
-            padding: 20px;
-            border-radius: 8px;
-            z-index: 10000;
-            max-width: 400px;
-            text-align: center;
-        `;
-        errorDiv.innerHTML = `
-            <h3>❌ Erro</h3>
-            <p>${message}</p>
-            <button onclick="location.reload()" style="margin-top: 10px; padding: 8px 16px; cursor: pointer;">
-                Recarregar Página
-            </button>
-        `;
-        document.body.appendChild(errorDiv);
     }
 
     /**

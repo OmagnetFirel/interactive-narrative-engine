@@ -10,31 +10,33 @@ interface ChoiceNodeProps {
 export function ChoiceNode({ data, selected }: ChoiceNodeProps) {
   return (
     <div className={`
-      rounded-xl p-4 min-w-[160px] transition-all duration-200
-      ${selected 
-        ? 'bg-white border-2 border-node-choice shadow-[0_4px_20px_rgba(255,152,0,0.3)]' 
-        : 'bg-orange-50 border-2 border-node-choice shadow-node'
+      rounded-xl p-4 min-w-[160px] transition-all duration-200 bg-surface border
+      ${selected
+        ? 'border-danger shadow-node-selected'
+        : 'border-border shadow-node'
       }
     `}>
       <Handle type="target" position={Position.Top} />
-      
-      {/* Ícone e tipo */}
+
       <div className="flex items-center gap-2 mb-2">
-        <div className="w-8 h-8 flex items-center justify-center bg-node-choice rounded-lg text-xl">
+        <div className={`w-8 h-8 flex items-center justify-center rounded-lg text-xl ${
+          selected ? 'bg-danger/10' : 'bg-copper/12'
+        }`}>
           🔀
         </div>
-        <div className="text-[11px] text-gray-600 font-semibold uppercase tracking-wider">
+        <div className={`text-[11px] font-semibold uppercase tracking-wider ${
+          selected ? 'text-danger' : 'text-primary'
+        }`}>
           Escolha
         </div>
       </div>
 
-      {/* Label */}
-      <div className="text-sm font-semibold text-gray-900">
+      <div className="text-sm font-semibold text-text">
         {data.label}
       </div>
 
       {data.timeout && (
-        <div className="text-[11px] text-orange-600 mt-1">
+        <div className="text-[11px] text-text-secondary mt-1">
           ⏱ Timeout: {data.timeout}s
         </div>
       )}

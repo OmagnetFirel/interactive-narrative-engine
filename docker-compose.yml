@@ -1,0 +1,123 @@
+services:
+  # ===================
+  # BANCO DE DADOS
+  # ===================
+  postgres:
+    image: postgres:16-alpine
+    container_name: ine-postgres
+    environment:
+      POSTGRES_USER: ine_user
+      POSTGRES_PASSWORD: ine_password
+      POSTGRES_DB: ine_database
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+      - ./docker/init.sql:/docker-entrypoint-initdb.d/init.sql
+    # Host 5433 evita conflito com PostgreSQL local já escutando em 5432
+    ports:
+      - "5433:5432"
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ine_user -d ine_database"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks:
+      - ine-network
+
+  # ===================
+  # API BACKEND
+  # ===================
+  api:
+    build:
+      context: .
+      dockerfile: ./docker/Dockerfile.api
+    container_name: ine-api
+    environment:
+      NODE_ENV: production
+      PORT: 3001
+      DATABASE_URL: postgresql://ine_user:ine_password@postgres:5432/ine_database
+      UPLOAD_DIR: /app/uploads
+      OUTPUT_DIR: /app/output
+      ADMIN_EMAIL: ${ADMIN_EMAIL}
+      ADMIN_PASSWORD: ${ADMIN_PASSWORD}
+      JWT_SECRET: ${JWT_SECRET}
+      PUBLIC_API_URL: ${PUBLIC_API_URL:-http://localhost:3001}
+      PUBLIC_MEDIA_URL: ${PUBLIC_MEDIA_URL:-http://localhost:3001}
+      PUBLIC_PLAYER_URL: ${PUBLIC_PLAYER_URL:-http://localhost:5173}
+      PUBLIC_EDITOR_URL: ${PUBLIC_EDITOR_URL:-http://localhost:3000}
+      COOKIE_SECURE: ${COOKIE_SECURE:-false}
+      CORS_ORIGINS: ${CORS_ORIGINS}
+      TRUST_PROXY: ${TRUST_PROXY:-false}
+      MAX_AUTHORS: ${MAX_AUTHORS:-5}
+      MAX_PROJECTS_PER_USER: ${MAX_PROJECTS_PER_USER:-3}
+      MAX_UPLOAD_BYTES_PER_USER: ${MAX_UPLOAD_BYTES_PER_USER:-5368709120}
+      RATE_LIMIT_GENERAL: ${RATE_LIMIT_GENERAL:-300}
+      RATE_LIMIT_INVITES: ${RATE_LIMIT_INVITES:-20}
+      RATE_LIMIT_PUBLIC_EXPENSIVE: ${RATE_LIMIT_PUBLIC_EXPENSIVE:-60}
+    volumes:
+      - uploads_data:/app/uploads
+    ports:
+      - "3001:3001"
+    depends_on:
+      postgres:
+        condition: service_healthy
+    networks:
+      - ine-network
+
+  # ===================
+  # EDITOR FRONTEND
+  # ===================
+  editor:
+    build:
+      context: .
+      dockerfile: ./docker/Dockerfile.editor
+      args:
+        VITE_API_URL: http://localhost:3001
+        VITE_PLAYER_URL: http://localhost:5173
+        VITE_MEDIA_URL: http://localhost:3001
+        VITE_UPLOAD_API_URL: http://localhost:3001
+    container_name: ine-editor
+    ports:
+      - "3000:80"
+    depends_on:
+      - api
+    networks:
+      - ine-network
+
+  # ===================
+  # PLAYER FRONTEND
+  # ===================
+  player:
+    build:
+      context: .
+      dockerfile: ./docker/Dockerfile.player
+      args:
+        VITE_API_URL: http://localhost:3001
+    container_name: ine-player
+    ports:
+      - "5173:80"
+    depends_on:
+      - api
+    networks:
+      - ine-network
+
+  # ===================
+  # NGINX (Streaming HLS)
+  # ===================
+  nginx-streaming:
+    image: nginx:alpine
+    container_name: ine-streaming
+    volumes:
+      - uploads_data:/usr/share/nginx/html/videos:ro
+      - ./docker/nginx-streaming.conf:/etc/nginx/conf.d/default.conf:ro
+    ports:
+      - "8080:80"
+    networks:
+      - ine-network
+
+networks:
+  ine-network:
+    driver: bridge
+
+volumes:
+  postgres_data:
+  uploads_data:

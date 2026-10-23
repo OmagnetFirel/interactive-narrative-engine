@@ -1,7 +1,18 @@
 import axios from 'axios';
+import { API_URL, UPLOAD_API_URL, api } from './api';
 
-
-const API_URL = 'http://localhost:3001';
+axios.interceptors.response.use(undefined, async (error) => {
+    const config = error.config as (typeof error.config & { _authRetried?: boolean }) | undefined;
+    if (error.response?.status === 401 && config && !config._authRetried) {
+        config._authRetried = true;
+        const user = await api.refresh();
+        if (user) {
+            config.headers = { ...config.headers, ...api.getAuthHeaders() };
+            return axios(config);
+        }
+    }
+    return Promise.reject(error);
+});
 
 export interface UploadProgress {
     percent: number;
@@ -36,6 +47,10 @@ export interface VideoInfo {
     processedAt?: string;
 }
 
+function authConfig() {
+    return { headers: api.getAuthHeaders() };
+}
+
 /**
  * Upload de vídeo com progresso usando fetch moderno
  */
@@ -46,19 +61,20 @@ export async function uploadVideo(
     const formData = new FormData();
     formData.append('video', file);
 
-    const response = await axios.post(`${API_URL}/api/videos/upload`, formData, {
+    const response = await axios.post(`${UPLOAD_API_URL}/api/videos/upload`, formData, {
         headers: {
-            'Content-Type': 'multipart/form-data'
+            'Content-Type': 'multipart/form-data',
+            ...api.getAuthHeaders(),
         },
         onUploadProgress: (progressEvent) => {
             if (progressEvent.total && onProgress) {
                 onProgress({
                     percent: Math.round((progressEvent.loaded / progressEvent.total) * 100),
                     loaded: progressEvent.loaded,
-                    total: progressEvent.total
+                    total: progressEvent.total,
                 });
             }
-        }
+        },
     });
 
     return response.data;
@@ -68,13 +84,14 @@ export async function uploadVideo(
  * Iniciar processamento HLS
  */
 export async function processVideo(videoId: string): Promise<void> {
-    await axios.post(`${API_URL}/api/videos/${videoId}/process`);
+    await axios.post(`${API_URL}/api/videos/${videoId}/process`, undefined, authConfig());
 }
+
 /**
  * Verificar status do processamento
  */
 export async function getVideoStatus(videoId: string): Promise<VideoStatus> {
-    const response = await axios.get(`${API_URL}/api/videos/${videoId}/status`);
+    const response = await axios.get(`${API_URL}/api/videos/${videoId}/status`, authConfig());
     return response.data;
 }
 
@@ -82,9 +99,10 @@ export async function getVideoStatus(videoId: string): Promise<VideoStatus> {
  * Listar todos os vídeos
  */
 export async function listVideos(): Promise<VideoInfo[]> {
-    const response = await axios.get(`${API_URL}/api/videos`);
+    const response = await axios.get(`${API_URL}/api/videos`, authConfig());
     return response.data.videos;
 }
+
 /**
  * Polling de status até conclusão
  */

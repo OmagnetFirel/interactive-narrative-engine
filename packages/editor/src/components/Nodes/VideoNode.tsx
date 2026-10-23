@@ -10,38 +10,39 @@ interface VideoNodeProps {
 export function VideoNode({ data, selected }: VideoNodeProps) {
   return (
     <div className={`
-      rounded-xl p-4 min-w-[180px] transition-all duration-200
-      ${selected 
-        ? 'bg-white border-2 border-node-video shadow-node-selected' 
-        : 'bg-blue-50 border-2 border-node-video shadow-node'
+      rounded-xl p-4 min-w-[180px] transition-all duration-200 bg-surface border
+      ${selected
+        ? 'border-danger shadow-node-selected'
+        : 'border-border shadow-node'
       }
     `}>
       <Handle type="target" position={Position.Top} />
-      
-      {/* Ícone e tipo */}
+
       <div className="flex items-center gap-2 mb-2">
-        <div className="w-8 h-8 flex items-center justify-center bg-node-video rounded-lg text-xl">
+        <div className={`w-8 h-8 flex items-center justify-center rounded-lg text-xl ${
+          selected ? 'bg-danger/10' : 'bg-copper/12'
+        }`}>
           🎥
         </div>
-        <div className="text-[11px] text-gray-600 font-semibold uppercase tracking-wider">
+        <div className={`text-[11px] font-semibold uppercase tracking-wider ${
+          selected ? 'text-danger' : 'text-primary'
+        }`}>
           Vídeo
         </div>
       </div>
 
-      {/* Label */}
-      <div className="text-sm font-semibold text-gray-900 mb-1">
+      <div className="text-sm font-semibold text-text mb-1">
         {data.label}
       </div>
 
-      {/* Info adicional */}
       {data.videoUrl && (
-        <div className="text-[11px] text-green-700 mt-1.5 px-2 py-1 bg-green-100 rounded inline-block">
+        <div className="text-[11px] text-primary mt-1.5 px-2 py-1 bg-copper/10 rounded inline-block">
           ✓ Vídeo configurado
         </div>
       )}
 
       {data.duration && (
-        <div className="text-[11px] text-gray-600 mt-1">
+        <div className="text-[11px] text-text-secondary mt-1">
           ⏱ {data.duration}s
         </div>
       )}
