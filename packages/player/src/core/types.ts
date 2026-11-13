@@ -35,6 +35,10 @@ export interface PlayerState {
     timeoutId: number | null;
     controlsTimeout: number | null;
     sessionFinalizeRequested: boolean;
+    /** Escolhas na tela, vídeo pausado esperando o aluno. */
+    waitingForChoice: boolean;
+    /** Aula encerrada: nenhum play() deve retomar o vídeo. */
+    playbackFinished: boolean;
 }
 
 export type { InteractiveGraph, GraphNode, GraphEdge };

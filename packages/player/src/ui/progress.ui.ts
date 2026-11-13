@@ -69,7 +69,6 @@ function tickProgress(now: number): void {
         dom.progressHandle.style.left = '0%';
         dom.currentTimeSpan.textContent = formatTime(0);
         dom.totalTimeSpan.textContent = formatTime(0);
-        dom.virtualTimeSpan.textContent = `${formatTime(0)} / ${formatTime(0)}`;
         return;
     }
 
@@ -103,7 +102,6 @@ function tickProgress(now: number): void {
 
     dom.currentTimeSpan.textContent = formatTime(virtualTime);
     dom.totalTimeSpan.textContent = formatTime(displayTotalDuration);
-    dom.virtualTimeSpan.textContent = `${formatTime(virtualTime)} / ${formatTime(displayTotalDuration)}`;
 }
 
 /** Compatível com timeupdate — o loop rAF já atualiza a UI. */

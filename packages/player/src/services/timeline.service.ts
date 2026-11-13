@@ -8,7 +8,6 @@ import { onTimelineBuilt, onTimelineAppended, resetProgressDisplay } from '../ui
 
 export class TimelineService {
     buildVirtualTimeline(nodePath: GraphNode[]): void {
-        console.log(`\n📊 ===== CONSTRUINDO TIMELINE VIRTUAL =====`);
 
         state.virtualTimeline = [];
         let accumulatedTime = 0;
@@ -22,9 +21,6 @@ export class TimelineService {
                 duration,
             });
 
-            console.log(
-                `  📹 ${node.data.label}: ${formatTime(accumulatedTime)} - ${formatTime(accumulatedTime + duration)} (${formatTime(duration)})`
-            );
 
             accumulatedTime += duration;
         }
@@ -51,7 +47,6 @@ export class TimelineService {
      * Adiciona novos vídeos à timeline SEM resetar o que já foi reproduzido
      */
     appendToTimeline(nodePath: GraphNode[]): void {
-        console.log(`\n📊 ===== EXPANDINDO TIMELINE =====`);
 
         if (nodePath.length === 0) return;
 
@@ -63,7 +58,6 @@ export class TimelineService {
             // Verificar se já existe na timeline
             const alreadyExists = state.virtualTimeline.some(seg => seg.node.id === node.id);
             if (alreadyExists) {
-                console.log(`  ⚠️ ${node.data.label} já está na timeline, pulando`);
                 continue;
             }
 
@@ -78,9 +72,6 @@ export class TimelineService {
                 state.stitchedPath.push(node);
             }
 
-            console.log(
-                `  ➕ ${node.data.label}: ${formatTime(accumulatedTime)} - ${formatTime(accumulatedTime + duration)} (${formatTime(duration)})`
-            );
 
             accumulatedTime += duration;
         }
@@ -138,7 +129,6 @@ export class TimelineService {
     advanceToNextSegment(): boolean {
         if (state.currentSegmentIndex < state.virtualTimeline.length - 1) {
             state.currentSegmentIndex++;
-            console.log(`📹 Avançando para segmento ${state.currentSegmentIndex + 1}/${state.virtualTimeline.length}`);
             return true;
         }
         return false;
@@ -177,7 +167,6 @@ export class TimelineService {
                     state.choicesShown = false;
 
                     logTimelineSegmentChange(prevIndex, i, currentTime);
-                    dom.currentNodeSpan.textContent = segment.node.data.label;
                 }
                 return;
             }
@@ -191,14 +180,10 @@ export class TimelineService {
     }
 
     seekToVirtualTime(virtualTime: number): void {
-        console.log(
-            `🎯 Seeking para tempo virtual: ${formatTime(virtualTime)} / ${formatTime(state.virtualTotalDuration)}`
-        );
 
         virtualTime = Math.max(0, Math.min(virtualTime, state.virtualTotalDuration));
 
         if (state.virtualTimeline.length === 0) {
-            console.warn('⚠️ Timeline virtual vazia');
             return;
         }
 
@@ -222,14 +207,11 @@ export class TimelineService {
         }
 
         if (!targetSegment) {
-            console.warn('⚠️ Não foi possível encontrar segmento');
             return;
         }
 
         const localTime = Math.max(0, virtualTime - targetSegment.startTime);
 
-        console.log(`  Segmento ${targetSegmentIndex}: ${targetSegment.node.data.label}`);
-        console.log(`  Tempo local: ${formatTime(localTime)}/${formatTime(targetSegment.duration)}`);
 
         if (targetSegmentIndex === state.currentSegmentIndex) {
             dom.video.currentTime = Math.min(localTime, targetSegment.duration);

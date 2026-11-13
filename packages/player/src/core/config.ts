@@ -105,3 +105,9 @@ export const STITCHED_PREFETCH_LEAD_SEC = 3;
 export const STITCHED_TRANSITION_LEAD_SEC = 1;
 /** Tempo mínimo reproduzido num segmento antes de permitir transição antecipada. */
 export const STITCHED_MIN_PLAY_BEFORE_TRANSITION_SEC = 2;
+/**
+ * Segundos antes do fim da cena em que o vídeo pausa se o aluno ainda não escolheu.
+ * Precisa ser maior que STITCHED_TRANSITION_LEAD_SEC para pausar antes da lógica
+ * de transição tentar avançar (a playlist EVENT ainda não tem o próximo trecho).
+ */
+export const CHOICE_PAUSE_LEAD_SEC = 1.25;

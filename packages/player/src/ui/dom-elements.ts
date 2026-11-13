@@ -1,6 +1,8 @@
 export const dom = {
     landingPanel: document.getElementById('landing-panel')!,
     loadingPanel: document.getElementById('loading-panel')!,
+    noticePanel: document.getElementById('notice-panel')!,
+    noticeOkBtn: document.getElementById('notice-ok-btn')!,
     errorPanel: document.getElementById('error-panel')!,
     errorMessage: document.getElementById('error-message')!,
 
@@ -23,9 +25,6 @@ export const dom = {
     endMessage: document.getElementById('end-message')!,
     restartButton: document.getElementById('restart-button')!,
 
-    currentNodeSpan: document.getElementById('current-node')!,
-    pathHistorySpan: document.getElementById('path-history')!,
-
     customControls: document.getElementById('custom-controls')!,
     progressBar: document.getElementById('progress-bar')!,
     progressAvailable: document.getElementById('progress-available')!,
@@ -33,7 +32,6 @@ export const dom = {
     progressHandle: document.getElementById('progress-handle')!,
     currentTimeSpan: document.getElementById('current-time')!,
     totalTimeSpan: document.getElementById('total-time')!,
-    virtualTimeSpan: document.getElementById('virtual-time')!,
     playPauseBtn: document.getElementById('play-pause-btn')!,
     muteBtn: document.getElementById('mute-btn')!,
     volumeSlider: document.getElementById('volume-slider') as HTMLInputElement,

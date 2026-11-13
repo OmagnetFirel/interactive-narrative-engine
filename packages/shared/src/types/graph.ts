@@ -1,42 +1,34 @@
-// Tipos base
-export type NodeType = 'video' | 'choice' | 'end';
+/**
+ * Modelo do grafo do BranchPlay.
+ *
+ * Existe um único tipo de nó: a CENA (`type: 'video'`), sempre associada a um clipe.
+ * As escolhas são as arestas (o rótulo da aresta é o texto do botão no player).
+ * Os papéis de cada cena são derivados da estrutura (ver `getSceneRoles`):
+ *   - Início: cena sem conexões de entrada;
+ *   - Bifurcação: cena com 2+ saídas (o aluno escolhe);
+ *   - Final: cena sem saídas.
+ */
+export type NodeType = 'video';
 
-// Node de Vídeo (sempre tem vídeo)
-export interface VideoNodeData {
+/** Tipos de nó das versões anteriores, convertidos por `normalizeGraph`. */
+export type LegacyNodeType = 'choice' | 'end';
+
+export interface SceneNodeData {
     label: string;
-    title: string;
+    title?: string;
     videoUrl?: string;
+    /** Duração em segundos, preenchida automaticamente a partir do vídeo enviado. */
     duration?: number;
-    description?: string;
     thumbnail?: string;
-    choiceTimestamp?: number;
+    /** Segundos antes do fim da cena em que as escolhas aparecem (cenas com bifurcação). */
     choiceBeforeEnd?: number;
+    /** Mensagem exibida ao terminar a aula (cenas finais). */
+    endMessage?: string;
+    description?: string;
 }
 
-// Node de Escolha (pode ou não ter vídeo)
-export interface ChoiceNodeData {
-    label: string;
-    title: string;
-    description?: string;
-    videoUrl?: string;
-    duration?: number;
-    timeout?: number;
-    defaultChoice?: string; // ID da edge default
-    choiceBeforeEnd?: number; // Segundos antes do fim do vídeo de transição para mostrar as escolhas
-}
-
-// Node Final (pode ter vídeo final ou apenas mensagem)
-export interface EndNodeData {
-    label: string;
-    title: string;
-    description?: string;
-    endingType?: 'good' | 'bad' | 'neutral';
-    // OPCIONAL: vídeo final
-    videoUrl?: string;
-    duration?: number;
-    // Mensagem de encerramento
-    message?: string;
-}
+/** @deprecated use SceneNodeData */
+export type VideoNodeData = SceneNodeData;
 
 // Edge (conexão = escolha)
 export interface GraphEdge {
@@ -47,24 +39,20 @@ export interface GraphEdge {
     type?: string;
     data?: {
         label?: string;
-        // Condição para exibir a escolha (futuro)
         condition?: string;
-        // Peso/probabilidade para prefetching
         weight?: number;
     };
 }
 
-// Node completo
 export interface GraphNode {
     id: string;
     type: NodeType;
     position: { x: number; y: number };
-    data: VideoNodeData | ChoiceNodeData | EndNodeData;
+    data: SceneNodeData;
 }
 
 export type ProjectVisibility = 'public' | 'private';
 
-// Grafo completo
 export interface InteractiveGraph {
     id: string;
     name: string;
@@ -79,26 +67,47 @@ export interface InteractiveGraph {
         author?: string;
         version?: string;
     };
-    // Configurações globais
     settings?: {
         autoplay?: boolean;
-        defaultTimeout?: number;
         showProgressBar?: boolean;
     };
 }
 
+export interface SceneRoles {
+    isStart: boolean;
+    isBranch: boolean;
+    isEnd: boolean;
+}
+
 // Validação
+export type ValidationErrorType =
+    | 'empty_graph'
+    | 'missing_start'
+    | 'orphan_node'
+    | 'unreachable_node'
+    | 'invalid_edge'
+    | 'no_branch';
+
+export type ValidationWarningType =
+    | 'multiple_starts'
+    | 'missing_video'
+    | 'missing_label'
+    | 'no_reachable_end'
+    | 'cycle'
+    | 'choice_timing';
+
 export interface ValidationError {
-    type: 'missing_start' | 'orphan_node' | 'unreachable_node' | 'invalid_edge' | 'missing_video';
+    type: ValidationErrorType;
     message: string;
     nodeId?: string;
     edgeId?: string;
 }
 
 export interface ValidationWarning {
-    type: 'no_choices' | 'multiple_ends' | 'long_path' | 'missing_video';
+    type: ValidationWarningType;
     message: string;
     nodeId?: string;
+    edgeId?: string;
 }
 
 export interface ValidationResult {

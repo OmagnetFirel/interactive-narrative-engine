@@ -126,7 +126,6 @@ function setupSpeedControl(): void {
             isMenuOpen = false;
             dom.speedMenu.classList.add('hidden');
 
-            console.log(`⚡ Velocidade alterada para ${speed}x`);
         });
     });
 }

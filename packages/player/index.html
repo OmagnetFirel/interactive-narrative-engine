@@ -27,6 +27,20 @@
         <p id="error-message" class="landing-text">Link inválido ou projeto não encontrado.</p>
       </div>
 
+      <!-- Aviso antes de iniciar a aula -->
+      <div id="notice-panel" class="panel panel-notice" style="display: none;" role="dialog" aria-modal="true" aria-labelledby="notice-title">
+        <div class="notice-icon" aria-hidden="true">🤖</div>
+        <h2 id="notice-title">Antes de começar</h2>
+        <p class="landing-text">
+          Os vídeos desta aula foram <strong>gerados por inteligência artificial</strong> e servem apenas como exemplo.
+        </p>
+        <p class="landing-text">
+          Neste teste, o foco é a <strong>usabilidade e a experiência na plataforma</strong>: como as escolhas
+          aparecem, a passagem entre as cenas e os controles do player. Não avalie o conteúdo do vídeo em si.
+        </p>
+        <button id="notice-ok-btn" type="button">OK, começar</button>
+      </div>
+
       <!-- Container do Player -->
       <div id="player-container" style="display: none;">
         <div id="video-wrapper">
@@ -113,19 +127,6 @@
                 <svg viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="M7 14H5v5h5v-2H7v-3zm-2-4h2V7h3V5H5v5zm12 7h-3v2h5v-5h-2v3zM14 5v2h3v3h2V5h-5z"/></svg>
               </button>
             </div>
-          </div>
-        </div>
-
-        <!-- Debug Info -->
-        <div id="debug-panel">
-          <div class="debug-item">
-            <strong>Nó Atual:</strong> <span id="current-node">-</span>
-          </div>
-          <div class="debug-item">
-            <strong>Tempo Virtual:</strong> <span id="virtual-time">0:00 / 0:00</span>
-          </div>
-          <div class="debug-item">
-            <strong>Caminho:</strong> <span id="path-history">-</span>
           </div>
         </div>
       </div>

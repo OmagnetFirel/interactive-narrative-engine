@@ -56,7 +56,7 @@ function rowToGraph(row: ProjectRow): InteractiveGraph {
         nodes: graphJson.nodes ?? [],
         edges: graphJson.edges ?? [],
         settings: graphJson.settings,
-        visibility: row.visibility ?? 'private',
+        visibility: row.visibility ?? 'public',
         shareToken: row.share_token,
         metadata: mergedMetadata,
     };
@@ -68,7 +68,8 @@ function graphToPersistedShape(graph: InteractiveGraph) {
 }
 
 function normalizeVisibility(v: string | undefined): ProjectVisibility {
-    return v === 'public' ? 'public' : 'private';
+    // Público por padrão: o player só abre projetos públicos (pelo link de compartilhamento).
+    return v === 'private' ? 'private' : 'public';
 }
 
 function createDbRepository(pool: pg.Pool): ProjectsRepository {

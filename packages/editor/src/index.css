@@ -316,3 +316,78 @@
 .react-flow__background {
   background-color: #faf8f4;
 }
+
+/* ===================== Cena: selos de papel ===================== */
+.scene-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  padding: 1px 7px;
+  border-radius: 9999px;
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.02em;
+  text-transform: uppercase;
+}
+.scene-badge-start {
+  background: rgba(184, 115, 51, 0.14);
+  color: #8f5626;
+}
+.scene-badge-branch {
+  background: rgba(90, 56, 40, 0.12);
+  color: #5a3828;
+}
+.scene-badge-end {
+  background: rgba(214, 74, 69, 0.12);
+  color: #c73e3a;
+}
+
+/* ===================== Conexão: texto da escolha ===================== */
+.choice-edge-label {
+  max-width: 260px;
+  padding: 3px 10px;
+  border-radius: 9999px;
+  font-size: 12px;
+  font-weight: 600;
+  color: #241711;
+  background: #ffffff;
+  border: 1px solid #e7d8ca;
+  box-shadow: 0 2px 6px rgba(58, 36, 24, 0.08);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  cursor: text;
+}
+.choice-edge-label:hover,
+.choice-edge-label.is-selected {
+  border-color: #b87333;
+}
+.choice-edge-label.is-empty {
+  color: #c73e3a;
+  border-style: dashed;
+  border-color: rgba(214, 74, 69, 0.5);
+  font-weight: 500;
+}
+.choice-edge-input {
+  width: 240px;
+  padding: 3px 10px;
+  border-radius: 9999px;
+  font-size: 12px;
+  color: #241711;
+  background: #ffffff;
+  border: 1px solid #b87333;
+  box-shadow: 0 0 0 3px rgba(184, 115, 51, 0.2);
+  outline: none;
+}
+.panel-floating .scene-badge-start {
+  background: rgba(217, 154, 91, 0.2);
+  color: #f3d7b5;
+}
+.panel-floating .scene-badge-branch {
+  background: rgba(231, 196, 160, 0.18);
+  color: #f3e3d1;
+}
+.panel-floating .scene-badge-end {
+  background: rgba(240, 138, 138, 0.18);
+  color: #f6b0b0;
+}

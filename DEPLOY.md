@@ -53,6 +53,8 @@ versão da API:
 docker compose --env-file .env.production -f docker-compose.prod.yml \
   exec -T postgres psql -U ine_user -d ine_database \
   < docker/migrations/002_multiuser_auth.sql
+
+docker compose --env-file .env.production -f docker-compose.prod.yml   exec -T postgres psql -U ine_user -d ine_database   < docker/migrations/003_public_by_default.sql
 ```
 
 A API também cria as estruturas ausentes ao iniciar, mas manter a migração

@@ -23,11 +23,9 @@ class PreloadService {
     async preload(videoUrl: string, videoId: string): Promise<void> {
         // Se já está em cache, não fazer nada
         if (this.cache[videoId]) {
-            console.log(`✅ Vídeo ${videoId} já está em cache`);
             return;
         }
 
-        console.log(`🔄 Precarregando vídeo: ${videoId}`);
 
         try {
             // Criar elemento de vídeo oculto
@@ -85,7 +83,6 @@ class PreloadService {
                 url: videoUrl
             };
 
-            console.log(`✅ Vídeo ${videoId} precarregado com sucesso`);
 
             // Limpar cache antigo se necessário
             this.cleanupOldCache();
@@ -104,7 +101,6 @@ class PreloadService {
         const cached = this.cache[videoId];
 
         if (cached) {
-            console.log(`✅ Usando vídeo precarregado: ${videoId}`);
             return cached.hls;
         }
 
@@ -118,11 +114,9 @@ class PreloadService {
         const cached = this.cache[videoId];
 
         if (!cached) {
-            console.warn(`⚠️ Vídeo ${videoId} não está em cache`);
             return null;
         }
 
-        console.log(`🔄 Transferindo vídeo precarregado ${videoId} para player principal`);
 
         try {
             // Detach do elemento temporário
@@ -152,7 +146,6 @@ class PreloadService {
         const cached = this.cache[videoId];
 
         if (cached) {
-            console.log(`🗑️ Removendo ${videoId} do cache de preload`);
             cached.hls.destroy();
             cached.videoElement.remove();
             delete this.cache[videoId];
@@ -167,7 +160,6 @@ class PreloadService {
 
         while (keys.length > this.MAX_CACHE_SIZE) {
             const oldest = keys.shift()!;
-            console.log(`🧹 Limpando cache antigo: ${oldest}`);
             this.remove(oldest);
         }
     }
@@ -176,7 +168,6 @@ class PreloadService {
      * Limpar todo o cache
      */
     clearAll(): void {
-        console.log('🧹 Limpando todo o cache de preload');
 
         for (const videoId of Object.keys(this.cache)) {
             this.remove(videoId);
@@ -202,13 +193,10 @@ class PreloadService {
      * Precarregar próximas escolhas de um nó
      */
     async preloadChoices(choices: Array<{ nextNodeId: string; videoUrl: string }>): Promise<void> {
-        console.log(`🔄 Precarregando ${choices.length} escolhas...`);
 
         // Precarregar em paralelo (com limite)
         const preloadPromises = choices.slice(0, this.MAX_CACHE_SIZE).map(choice =>
-            this.preload(choice.videoUrl, choice.nextNodeId).catch(err => {
-                console.warn(`⚠️ Falha ao precarregar escolha ${choice.nextNodeId}:`, err);
-            })
+            this.preload(choice.videoUrl, choice.nextNodeId).catch(() => { })
         );
 
         await Promise.all(preloadPromises);

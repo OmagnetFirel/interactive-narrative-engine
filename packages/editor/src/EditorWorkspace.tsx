@@ -13,97 +13,47 @@ import {
   type Edge,
 } from '@xyflow/react';
 import '@xyflow/react/dist/style.css';
-import type { InteractiveGraph, GraphNode, GraphEdge, EndNodeData, ChoiceNodeData, VideoNodeData, ProjectVisibility } from '@ine/shared';
+import type { InteractiveGraph, GraphNode, GraphEdge, SceneNodeData, ProjectVisibility } from '@ine/shared';
+import { canSaveGraph, getBlockingErrors, normalizeGraph, validateGraph } from '@ine/shared';
 import { api, PLAYER_URL } from './services/api';
-import { VideoNode } from './components/Nodes/VideoNode';
-import { ChoiceNode } from './components/Nodes/ChoiceNode';
-import { EndNode } from './components/Nodes/EndNode';
+import { SceneNode } from './components/Nodes/SceneNode';
+import { ChoiceEdge } from './components/Edges/ChoiceEdge';
 import { Toolbar } from './components/Toolbar/Toolbar';
 import { PropertiesPanel } from './components/PropertiesPanel/PropertiesPanel';
 import { ValidationPanel } from './components/ValidationPanel/ValidationPanel';
+import { TutorialModal } from './components/Tutorial/TutorialModal';
+import { useTutorial } from './components/Tutorial/useTutorial';
 
 const initialNodes: Node[] = [
   {
     id: '1',
     type: 'video',
-    data: {
-      label: 'Início da História',
-      title: 'Início da História',
-      videoUrl: undefined,
-      duration: 45,
-      description: 'Primeiro nó da narrativa',
-    },
+    data: { label: 'Introdução', title: 'Introdução' },
     position: { x: 250, y: 0 },
   },
   {
     id: '2',
-    type: 'choice',
-    data: {
-      label: 'Escolha A',
-      title: 'Escolha A',
-      timeout: 10,
-    },
-    position: { x: 100, y: 180 },
+    type: 'video',
+    data: { label: 'Caminho A', title: 'Caminho A' },
+    position: { x: 60, y: 300 },
   },
   {
     id: '3',
-    type: 'choice',
-    data: {
-      label: 'Escolha B',
-      title: 'Escolha B',
-    },
-    position: { x: 400, y: 180 },
-  },
-  {
-    id: '4',
-    type: 'end',
-    data: {
-      label: 'Final Feliz',
-      title: 'Final Feliz',
-      endingType: 'good',
-    },
-    position: { x: 100, y: 360 },
-  },
-  {
-    id: '5',
-    type: 'end',
-    data: {
-      label: 'Final Triste',
-      title: 'Final Triste',
-      endingType: 'bad',
-    },
-    position: { x: 400, y: 360 },
+    type: 'video',
+    data: { label: 'Caminho B', title: 'Caminho B' },
+    position: { x: 440, y: 300 },
   },
 ];
 
 const initialEdges: Edge[] = [
-  {
-    id: 'e1-2',
-    source: '1',
-    target: '2',
-    label: 'Caminho A',
-    data: { label: 'Caminho A' },
-  },
-  {
-    id: 'e1-3',
-    source: '1',
-    target: '3',
-    label: 'Caminho B',
-    data: { label: 'Caminho B' },
-  },
-  {
-    id: 'e2-4',
-    source: '2',
-    target: '4',
-    label: 'Fim',
-  },
-  {
-    id: 'e3-5',
-    source: '3',
-    target: '5',
-    label: 'Fim',
-  },
+  { id: 'e1-2', source: '1', target: '2', type: 'choice', label: 'Opção A', data: { label: 'Opção A' } },
+  { id: 'e1-3', source: '1', target: '3', type: 'choice', label: 'Opção B', data: { label: 'Opção B' } },
 ];
+
+/** Garante que toda conexão use o componente de escolha editável. */
+function withChoiceEdgeType(edges: Edge[]): Edge[] {
+  return edges.map((e) => (e.type === 'choice' ? e : { ...e, type: 'choice' }));
+}
 
 export default function EditorWorkspace() {
   const { projectId: projectIdParam } = useParams<{ projectId?: string }>();
@@ -120,23 +70,40 @@ export default function EditorWorkspace() {
   );
   const [loadError, setLoadError] = useState<string | null>(null);
   const [isSaving, setIsSaving] = useState(false);
-  const [visibility, setVisibility] = useState<ProjectVisibility>('private');
+  const [visibility, setVisibility] = useState<ProjectVisibility>('public');
   const [shareToken, setShareToken] = useState<string | null>(null);
   const [shareUrl, setShareUrl] = useState<string | null>(null);
   const [copyFeedback, setCopyFeedback] = useState<string | null>(null);
   const [activeTab, setActiveTab] = useState<'project' | 'validation'>('project');
+  const tutorial = useTutorial();
 
   const [selectedNode, setSelectedNode] = useState<Node | null>(null);
   const [selectedEdge, setSelectedEdge] = useState<Edge | null>(null);
 
-  const nodeTypes = useMemo(
-    () => ({
-      video: VideoNode,
-      choice: ChoiceNode,
-      end: EndNode,
-    }),
-    []
+  // Versões atuais do elemento selecionado (o estado guarda só um retrato do clique).
+  // Comparar só `data`/`label` evita re-sincronizar o painel a cada arraste.
+  const liveSelectedNodeData = nodes.find((n) => n.id === selectedNode?.id)?.data;
+  const liveSelectedNode = useMemo(
+    () => (selectedNode && liveSelectedNodeData ? { ...selectedNode, data: liveSelectedNodeData } : null),
+    [selectedNode, liveSelectedNodeData]
   );
+  const liveSelectedEdge = useMemo(
+    () => (selectedEdge ? edges.find((e) => e.id === selectedEdge.id) ?? null : null),
+    [selectedEdge, edges]
+  );
+
+  const [migrationNotice, setMigrationNotice] = useState(false);
+  const [saveFeedback, setSaveFeedback] = useState<string | null>(null);
+
+  const nodeTypes = useMemo(() => ({ video: SceneNode }), []);
+  const edgeTypes = useMemo(() => ({ choice: ChoiceEdge }), []);
+
+  const validation = useMemo(
+    () => validateGraph(nodes as unknown as GraphNode[], edges as unknown as GraphEdge[]),
+    [nodes, edges]
+  );
+  const saveBlocked = !canSaveGraph(validation);
+  const blockingReason = getBlockingErrors(validation)[0]?.message;
 
   useEffect(() => {
     let cancelled = false;
@@ -157,11 +124,12 @@ export default function EditorWorkspace() {
       setEdges(initialEdges);
       setProjectName('Minha História Interativa');
       setSourceGraph(null);
-      setVisibility('private');
+      setVisibility('public');
       setShareToken(null);
       setShareUrl(null);
       setLoadState('idle');
       setLoadError(null);
+      setMigrationNotice(false);
       return () => {
         cancelled = true;
       };
@@ -174,11 +142,17 @@ export default function EditorWorkspace() {
       try {
         const graph = await api.getProject(projectIdFromUrl);
         if (cancelled) return;
-        setNodes((graph.nodes ?? []) as unknown as Node[]);
-        setEdges((graph.edges ?? []) as unknown as Edge[]);
+        // Projetos antigos (com nós de escolha/fim) são convertidos para o modelo de cena única.
+        const normalized = normalizeGraph(
+          (graph.nodes ?? []) as unknown as Node[],
+          (graph.edges ?? []) as unknown as Edge[]
+        );
+        setNodes(normalized.nodes);
+        setEdges(withChoiceEdgeType(normalized.edges));
+        setMigrationNotice(normalized.changed);
         setProjectName(graph.name);
         setSourceGraph(graph);
-        setVisibility(graph.visibility ?? 'private');
+        setVisibility(graph.visibility ?? 'public');
         if (graph.shareToken) {
           setShareToken(graph.shareToken);
           setShareUrl(`${PLAYER_URL.replace(/\/$/, '')}/play/${graph.shareToken}`);
@@ -196,32 +170,19 @@ export default function EditorWorkspace() {
     };
   }, [projectIdFromUrl, setNodes, setEdges]);
 
-  const handleAddNode = useCallback(
-    (type: 'video' | 'choice' | 'end') => {
-      const newId = `${Date.now()}`;
-      const labels = {
-        video: 'Novo Vídeo',
-        choice: 'Nova Escolha',
-        end: 'Novo Final',
-      };
-
-      const newNode: Node = {
-        id: newId,
-        type,
-        data: {
-          label: labels[type],
-          title: labels[type],
-        },
-        position: {
-          x: Math.random() * 400 + 100,
-          y: Math.random() * 400 + 100,
-        },
-      };
-
-      setNodes((nds) => [...nds, newNode]);
-    },
-    [setNodes]
-  );
+  const handleAddNode = useCallback(() => {
+    const newId = `${Date.now()}`;
+    const newNode: Node = {
+      id: newId,
+      type: 'video',
+      data: { label: 'Nova cena', title: 'Nova cena' },
+      position: {
+        x: Math.random() * 400 + 100,
+        y: Math.random() * 400 + 100,
+      },
+    };
+    setNodes((nds) => [...nds, newNode]);
+  }, [setNodes]);
 
   const onConnect: OnConnect = useCallback(
     (connection) => {
@@ -229,8 +190,9 @@ export default function EditorWorkspace() {
         id: `e${connection.source}-${connection.target}`,
         source: connection.source!,
         target: connection.target!,
-        label: 'Nova conexão',
-        data: { label: 'Nova conexão' },
+        type: 'choice',
+        label: '',
+        data: { label: '' },
       };
       setEdges((eds) => addEdge(edge, eds));
     },
@@ -238,7 +200,7 @@ export default function EditorWorkspace() {
   );
 
   const handleUpdateNode = useCallback(
-    (nodeId: string, newData: Partial<VideoNodeData | ChoiceNodeData | EndNodeData>) => {
+    (nodeId: string, newData: Partial<SceneNodeData>) => {
       setNodes((nds) =>
         nds.map((node) =>
           node.id === nodeId ? { ...node, data: { ...node.data, ...newData } } : node
@@ -296,6 +258,10 @@ export default function EditorWorkspace() {
       alert('Por favor, digite um nome para o projeto!');
       return;
     }
+    if (saveBlocked) {
+      alert(blockingReason ?? 'O projeto ainda não pode ser salvo.');
+      return;
+    }
 
     setIsSaving(true);
 
@@ -335,13 +301,12 @@ export default function EditorWorkspace() {
       if (!projectIdFromUrl) {
         navigate(`/editor/${encodeURIComponent(saved.id)}`, { replace: true });
       }
-      console.log('✅ Salvo na API:', saved.id);
-      alert(
-        `✅ Projeto "${saved.name}" salvo com sucesso!\n\n📊 ${nodes.length} nós e ${edges.length} conexões\n\nVisibilidade: ${saved.visibility ?? visibility}`
-      );
+      setMigrationNotice(false);
+      setSaveFeedback('✓ Projeto salvo');
+      setTimeout(() => setSaveFeedback(null), 2500);
     } catch (error) {
-      console.error('❌ Erro:', error);
-      alert('❌ Erro ao salvar projeto.\n\nVerifique se a API está rodando.');
+      const apiMessage = (error as { response?: { data?: { error?: string } } })?.response?.data?.error;
+      alert(`❌ Erro ao salvar projeto.\n\n${apiMessage ?? 'Verifique se a API está rodando.'}`);
     } finally {
       setIsSaving(false);
     }
@@ -383,6 +348,9 @@ export default function EditorWorkspace() {
         onNodesChange={onNodesChange}
         onEdgesChange={onEdgesChange}
         onConnect={onConnect}
+        edgeTypes={edgeTypes}
+        defaultEdgeOptions={{ type: 'choice' }}
+        zoomOnDoubleClick={false}
         onNodeClick={onNodeClick}
         onEdgeClick={onEdgeClick}
         onPaneClick={onPaneClick}
@@ -436,6 +404,14 @@ export default function EditorWorkspace() {
                   >
                     Novo projeto
                   </Link>
+                  <button
+                    type="button"
+                    onClick={tutorial.show}
+                    className="ml-auto px-2.5 py-0.5 rounded-full text-xs font-semibold border border-copper/50 text-copper-light hover:bg-white/10 transition-colors"
+                    title="Ver o tutorial do editor"
+                  >
+                    ? Como usar
+                  </button>
                 </div>
 
                 <h2 className="text-xl font-semibold text-text mb-4">🎬 Editor de Narrativa</h2>
@@ -455,7 +431,7 @@ export default function EditorWorkspace() {
                       <option value="__new__">Novo projeto (rascunho)</option>
                       {projectList.map((p) => (
                         <option key={p.id} value={p.id}>
-                          {p.name} ({p.nodes?.length ?? 0} nós)
+                          {p.name} ({p.nodes?.length ?? 0} cenas)
                         </option>
                       ))}
                     </select>
@@ -476,7 +452,7 @@ export default function EditorWorkspace() {
                 <div className="grid grid-cols-2 gap-3 mb-4 p-3 bg-surface-hover rounded-lg">
                   <div className="text-center">
                     <div className="text-2xl font-bold text-primary tabular-nums">{nodes.length}</div>
-                    <div className="text-xs text-text-secondary">Nós</div>
+                    <div className="text-xs text-text-secondary">Cenas</div>
                   </div>
                   <div className="text-center">
                     <div className="text-2xl font-bold text-primary tabular-nums">{edges.length}</div>
@@ -511,7 +487,9 @@ export default function EditorWorkspace() {
                     </button>
                   </div>
                   <p className="text-xs text-text-secondary mt-2">
-                    Visitantes acessam somente via link de compartilhamento.
+                    {visibility === 'public'
+                      ? 'Qualquer pessoa com o link de compartilhamento pode assistir.'
+                      : 'Privado: o link não abre para ninguém, nem para você. Use para rascunhos.'}
                   </p>
                 </div>
 
@@ -541,14 +519,24 @@ export default function EditorWorkspace() {
                   </div>
                 )}
 
+                {migrationNotice && (
+                  <div className="mb-3 p-3 rounded-lg bg-white/5 border border-copper/40 text-xs text-text-secondary">
+                    Este projeto usava nós de escolha/final e foi convertido para cenas. Confira as conexões e salve para manter.
+                  </div>
+                )}
+
                 <button
                   type="button"
                   onClick={exportGraph}
-                  disabled={isSaving}
+                  disabled={isSaving || saveBlocked}
+                  title={saveBlocked ? blockingReason : undefined}
                   className="btn-primary w-full"
                 >
-                  {isSaving ? '⏳ Salvando...' : '💾 Salvar Projeto na API'}
+                  {isSaving ? '⏳ Salvando...' : saveFeedback ?? '💾 Salvar Projeto'}
                 </button>
+                {saveBlocked && blockingReason && (
+                  <p className="text-xs text-danger-soft mt-2">{blockingReason}</p>
+                )}
               </div>
             )}
 
@@ -567,8 +555,9 @@ export default function EditorWorkspace() {
 
           <div className="panel-floating w-[340px] min-h-0 overflow-y-auto pointer-events-auto">
             <PropertiesPanel
-              selectedNode={selectedNode}
-              selectedEdge={selectedEdge}
+              selectedNode={liveSelectedNode}
+              selectedEdge={liveSelectedEdge}
+              edges={edges}
               onUpdateNode={handleUpdateNode}
               onUpdateEdge={handleUpdateEdge}
               onDeleteNode={handleDeleteNode}
@@ -577,6 +566,8 @@ export default function EditorWorkspace() {
           </div>
         </div>
       </ReactFlow>
+
+      <TutorialModal open={tutorial.open} onClose={tutorial.close} />
     </div>
   );
 }

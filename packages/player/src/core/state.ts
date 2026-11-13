@@ -21,6 +21,8 @@ export const state: PlayerState = {
     timeoutId: null,
     controlsTimeout: null,
     sessionFinalizeRequested: false,
+    waitingForChoice: false,
+    playbackFinished: false,
 };
 
 export function resetState(): void {
@@ -39,4 +41,6 @@ export function resetState(): void {
     state.currentSegmentIndex = 0;
     state.virtualTotalDuration = 0;
     state.sessionFinalizeRequested = false;
+    state.waitingForChoice = false;
+    state.playbackFinished = false;
 }

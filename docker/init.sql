@@ -43,7 +43,7 @@ CREATE TABLE IF NOT EXISTS projects (
     description TEXT,
     graph JSONB NOT NULL DEFAULT '{"nodes": [], "edges": []}',
     metadata JSONB DEFAULT '{}',
-    visibility VARCHAR(20) NOT NULL DEFAULT 'private' CHECK (visibility IN ('public', 'private')),
+    visibility VARCHAR(20) NOT NULL DEFAULT 'public' CHECK (visibility IN ('public', 'private')),
     share_token UUID NOT NULL DEFAULT uuid_generate_v4(),
     owner_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
     created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,

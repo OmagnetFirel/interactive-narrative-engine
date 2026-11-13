@@ -39,7 +39,6 @@ export class ApiService {
             return { ok: true, status: 200 };
         } catch (error: any) {
             const status = error.response?.status ?? 0;
-            console.warn(`⚠️ Append na sessão falhou (status ${status}):`, error.response?.data || error.message);
             return { ok: false, status };
         }
     }
@@ -51,7 +50,6 @@ export class ApiService {
         try {
             await axios.post(`${API_URL}/api/sessions/${sessionId}/end`, { shareToken: this.shareToken });
         } catch (error: any) {
-            console.warn('⚠️ Erro ao encerrar sessão:', error.response?.data || error.message);
         }
     }
 
@@ -70,8 +68,6 @@ export class ApiService {
     }
 
     async preloadStitchedPlaylist(nodePath: GraphNode[]): Promise<StitchedPlaylist | null> {
-        console.log(`\n🎬 ===== PRÉ-CARREGANDO PLAYLIST STITCHED =====`);
-        console.log(`Caminho: ${nodePath.map((n) => n.data.label).join(' → ')}`);
 
         try {
             const videoIds: string[] = [];
@@ -80,14 +76,12 @@ export class ApiService {
                 const videoUrl = (node.data as any).videoUrl;
 
                 if (!videoUrl || !videoUrl.trim()) {
-                    console.warn(`⚠️ Nó ${node.data.label} não tem videoUrl, pulando`);
                     continue;
                 }
 
                 const videoId = extractVideoId(videoUrl);
 
                 if (videoId) {
-                    console.log(`  ✅ ${node.data.label} → videoId: ${videoId.slice(0, 8)}...`);
                     videoIds.push(videoId);
                 } else {
                     console.error(`  ❌ Não foi possível extrair videoId de: ${videoUrl}`);
@@ -100,15 +94,12 @@ export class ApiService {
             }
 
             if (videoIds.length === 1) {
-                console.log('ℹ️ Apenas 1 vídeo no caminho, não precisa stitching');
                 return null;
             }
 
-            console.log(`📦 Solicitando stitching de ${videoIds.length} vídeos...`);
 
             const masterPlaylistUrl = await this.stitchVideoIds(videoIds);
             if (!masterPlaylistUrl) return null;
-            console.log(`✅ Playlist stitched pré-carregada: ${masterPlaylistUrl}`);
 
             return {
                 url: masterPlaylistUrl,

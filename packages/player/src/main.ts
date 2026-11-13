@@ -9,10 +9,30 @@ import { resetProgressDisplay, startProgressLoop, stopProgressLoop } from './ui/
 import { hlsService } from './services/hls.service';
 import { preloadService } from './services/preload.service';
 import { timelineService } from './services/timeline.service';
+import { normalizeGraph } from '@ine/shared';
 
-type ViewState = 'landing' | 'loading' | 'error' | 'playing';
+type ViewState = 'landing' | 'loading' | 'error' | 'notice' | 'playing';
 
 let currentShareToken: string | null = null;
+/** O aviso aparece uma vez por carregamento da página (não a cada "voltar ao início"). */
+let noticeAccepted = false;
+
+/** Mostra o aviso de conteúdo gerado por IA e resolve quando o usuário clica em OK. */
+function waitForNoticeAccepted(): Promise<void> {
+  if (noticeAccepted) return Promise.resolve();
+  showView('notice');
+  dom.noticeOkBtn.focus();
+  return new Promise((resolve) => {
+    dom.noticeOkBtn.addEventListener(
+      'click',
+      () => {
+        noticeAccepted = true;
+        resolve();
+      },
+      { once: true }
+    );
+  });
+}
 
 function parseShareTokenFromPath(): string | null {
   const parts = window.location.pathname.split('/').filter(Boolean);
@@ -26,6 +46,7 @@ function parseShareTokenFromPath(): string | null {
 function showView(view: ViewState, errorMessage?: string): void {
   dom.landingPanel.style.display = view === 'landing' ? 'block' : 'none';
   dom.loadingPanel.style.display = view === 'loading' ? 'block' : 'none';
+  dom.noticePanel.style.display = view === 'notice' ? 'block' : 'none';
   dom.errorPanel.style.display = view === 'error' ? 'block' : 'none';
   dom.playerContainer.style.display = view === 'playing' ? 'block' : 'none';
 
@@ -35,7 +56,9 @@ function showView(view: ViewState, errorMessage?: string): void {
 }
 
 async function startProject(graph: Awaited<ReturnType<typeof apiService.getProjectByShareToken>>): Promise<void> {
-  state.currentGraph = graph;
+  // Projetos salvos no formato antigo (nós de escolha/fim) viram cenas.
+  const normalized = normalizeGraph(graph.nodes, graph.edges);
+  state.currentGraph = { ...graph, nodes: normalized.nodes, edges: normalized.edges };
 
   const initialNode = findInitialNode(state.currentGraph);
   if (!initialNode) {
@@ -55,7 +78,7 @@ async function loadProjectByShareToken(token: string): Promise<void> {
 
   try {
     const graph = await apiService.getProjectByShareToken(token);
-    console.log('📊 Projeto carregado via share token:', graph.name);
+    await waitForNoticeAccepted();
     await startProject(graph);
   } catch (error: unknown) {
     console.error('❌ Erro ao carregar projeto:', error);
@@ -79,11 +102,14 @@ function axiosIs404(error: unknown): boolean {
 }
 
 async function init() {
-  console.log('🚀 Inicializando Interactive Narrative Player (Refatorado)');
-
   dom.restartButton.addEventListener('click', handleRestart);
   dom.video.addEventListener('timeupdate', onTimeUpdate);
   dom.video.addEventListener('ended', handleVideoEnded);
+  // Rede de segurança: depois do fim da aula, nenhum play() atrasado (sessão HLS,
+  // seek pendente) pode voltar a tocar o áudio atrás do overlay.
+  dom.video.addEventListener('play', () => {
+    if (state.playbackFinished) dom.video.pause();
+  });
   dom.backToHomeBtn.addEventListener('click', handleBackToHome);
 
   setupCustomControls();
@@ -96,72 +122,10 @@ async function init() {
   } else {
     showView('landing');
   }
-
-  if (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1') {
-    setupDebugPanel();
-  }
 }
 
 function onTimeUpdate() {
   handleTimeUpdate();
-}
-
-function setupDebugPanel() {
-  const debugPanel = document.createElement('div');
-  debugPanel.id = 'debug-panel-dev';
-  debugPanel.style.cssText = `
-    position: fixed;
-    top: 10px;
-    right: 10px;
-    background: rgba(58, 36, 24, 0.94);
-    color: #faf8f4;
-    padding: 12px;
-    border-radius: 6px;
-    font-family: 'Courier New', monospace;
-    font-size: 11px;
-    z-index: 9999;
-    max-width: 280px;
-    border: 1px solid rgba(184, 115, 51, 0.45);
-  `;
-
-  debugPanel.innerHTML = `
-    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px; border-bottom: 1px solid rgba(231, 216, 202, 0.25); padding-bottom: 6px;">
-      <strong style="color: #D99A5B;">📊 DEBUG PANEL</strong>
-      <button id="toggle-debug" style="background: transparent; border: 1px solid #D99A5B; color: #D99A5B; padding: 2px 6px; cursor: pointer; border-radius: 3px; font-size: 10px;">−</button>
-    </div>
-    <div id="debug-content">
-      <div style="margin-bottom: 6px;">
-        <div style="color: #D99A5B; font-weight: bold; margin-bottom: 2px;">HLS Info:</div>
-        <div id="hls-level" style="margin-left: 8px;">Level: -</div>
-        <div id="hls-bitrate" style="margin-left: 8px;">Bitrate: -</div>
-      </div>
-      
-      <div style="margin-bottom: 6px;">
-        <div style="color: #D99A5B; font-weight: bold; margin-bottom: 2px;">Buffer:</div>
-        <div id="buffer-length" style="margin-left: 8px;">Length: -</div>
-        <div id="buffer-health" style="margin-left: 8px;">Health: -</div>
-      </div>
-      
-      <div style="margin-bottom: 6px;">
-        <div style="color: #D99A5B; font-weight: bold; margin-bottom: 2px;">Preload Cache:</div>
-        <div id="preload-status" style="margin-left: 8px;">0 / 3</div>
-      </div>
-    </div>
-  `;
-
-  document.body.appendChild(debugPanel);
-
-  let isMinimized = false;
-  const toggleBtn = document.getElementById('toggle-debug')!;
-  const content = document.getElementById('debug-content')!;
-
-  toggleBtn.addEventListener('click', () => {
-    isMinimized = !isMinimized;
-    content.style.display = isMinimized ? 'none' : 'block';
-    toggleBtn.textContent = isMinimized ? '+' : '−';
-  });
-
-  setInterval(updateDebugPanel, 2000);
 }
 
 function handleBackToHome() {
@@ -183,40 +147,6 @@ function handleBackToHome() {
     showView('landing');
   }
 
-  console.log('🏠 Voltando ao início da narrativa...');
-}
-
-function updateDebugPanel() {
-  const hls = hlsService.getHls();
-
-  if (hls && hls.levels && hls.levels.length > 0) {
-    const levelInfo = hls.currentLevel === -1
-      ? `Auto (${hls.levels[hls.loadLevel]?.height || '-'}p)`
-      : `${hls.levels[hls.currentLevel]?.height || '-'}p`;
-
-    document.getElementById('hls-level')!.textContent = `Level: ${levelInfo}`;
-
-    const level = hls.levels[hls.loadLevel] || hls.levels[0];
-    if (level) {
-      const bitrate = (level.bitrate / 1000).toFixed(0);
-      document.getElementById('hls-bitrate')!.textContent = `Bitrate: ${bitrate} kbps`;
-    }
-  }
-
-  const video = dom.video;
-  if (video && video.buffered.length > 0) {
-    const currentTime = video.currentTime;
-    const bufferEnd = video.buffered.end(video.buffered.length - 1);
-    const bufferLength = bufferEnd - currentTime;
-
-    document.getElementById('buffer-length')!.textContent = `Length: ${bufferLength.toFixed(2)}s`;
-    document.getElementById('buffer-health')!.textContent =
-      `Health: ${bufferLength > 2 ? '✅ Good' : '⚠️ Low'}`;
-  }
-
-  const cacheStatus = preloadService.getCacheStatus();
-  document.getElementById('preload-status')!.textContent =
-    `${cacheStatus.size} / ${cacheStatus.maxSize} videos`;
 }
 
 init();

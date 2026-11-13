@@ -1,12 +1,19 @@
 import { useState, useRef } from 'react';
+import { createPortal } from 'react-dom';
 import { uploadVideo, processVideo, waitForProcessing, type VideoStatus } from '../../services/videoApi';
 import { MEDIA_URL } from '../../services/api';
+
+export interface UploadedVideoInfo {
+  hlsUrl: string;
+  videoId: string;
+  duration?: number;
+  thumbnailUrl?: string;
+}
 
 interface VideoUploadModalProps {
   isOpen: boolean;
   onClose: () => void;
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  onVideoReady: (hlsUrl: string, videoId: string, metadata: any) => void;
+  onVideoReady: (info: UploadedVideoInfo) => void;
 }
 
 export function VideoUploadModal({ isOpen, onClose, onVideoReady }: VideoUploadModalProps) {
@@ -51,12 +58,10 @@ export function VideoUploadModal({ isOpen, onClose, onVideoReady }: VideoUploadM
       setIsUploading(true);
 
       // 1. Upload
-      console.log('📤 Iniciando upload...');
       const { videoId, metadata } = await uploadVideo(file, (progress) => {
         setUploadProgress(progress.percent);
       });
 
-      console.log(`✅ Upload concluído: ${videoId}`);
       setIsUploading(false);
       setIsProcessing(true);
       setProcessingStatus('Iniciando processamento...');
@@ -71,16 +76,14 @@ export function VideoUploadModal({ isOpen, onClose, onVideoReady }: VideoUploadM
           setProcessingStatus('Processando vídeo (isso pode demorar alguns minutos)...');
         }
       });
-
-      console.log('✅ Processamento concluído:', finalStatus);
-      
       if (finalStatus.hlsUrl) {
         setProcessingStatus('Concluído!');
-        onVideoReady(
-          `${MEDIA_URL}${finalStatus.hlsUrl}`,
+        onVideoReady({
+          hlsUrl: `${MEDIA_URL}${finalStatus.hlsUrl}`,
           videoId,
-          metadata
-        );
+          duration: finalStatus.metadata?.duration ?? metadata?.duration,
+          thumbnailUrl: finalStatus.thumbnailUrl ? `${MEDIA_URL}${finalStatus.thumbnailUrl}` : undefined,
+        });
         
         // Fechar modal após 1s
         setTimeout(() => {
@@ -113,7 +116,8 @@ export function VideoUploadModal({ isOpen, onClose, onVideoReady }: VideoUploadM
     return `${(bytes / 1024 / 1024).toFixed(1)} MB`;
   };
 
-  return (
+  // Portal no <body>: dentro do painel escuro o modal herdava as cores de texto claras.
+  return createPortal(
     <div className="fixed inset-0 bg-ink/45 flex items-center justify-center z-50">
       <div className="bg-surface border border-border rounded-[20px] shadow-soft w-full max-w-lg mx-4">
         {/* Header */}
@@ -250,6 +254,7 @@ export function VideoUploadModal({ isOpen, onClose, onVideoReady }: VideoUploadM
           </button>
         </div>
       </div>
-    </div>
+    </div>,
+    document.body
   );
 }

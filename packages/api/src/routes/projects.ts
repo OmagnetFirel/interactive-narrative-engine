@@ -1,5 +1,6 @@
 import type { Express, Request, Response } from 'express';
 import type { InteractiveGraph } from '@ine/shared';
+import { getBlockingErrors, normalizeGraph, validateGraph } from '@ine/shared';
 import { requireAuth, type AuthenticatedRequest } from '../middleware/requireAdmin.js';
 import { buildShareUrl, getProjectsRepository } from '../repositories/projectsRepo.js';
 import { quotas } from '../config/runtime.js';
@@ -32,11 +33,23 @@ export function registerProjectsRoutes(app: Express) {
     });
 
     app.post('/api/projects', requireAuth, async (req: AuthenticatedRequest, res: Response) => {
-        const graph = req.body as InteractiveGraph;
+        const body = req.body as InteractiveGraph;
 
-        if (!graph || !graph.id || !graph.name || !Array.isArray(graph.nodes) || !Array.isArray(graph.edges)) {
+        if (!body || !body.id || !body.name || !Array.isArray(body.nodes) || !Array.isArray(body.edges)) {
             return res.status(400).json({
                 error: 'Grafo inválido: id, name, nodes e edges são obrigatórios',
+            });
+        }
+
+        // Converte formatos antigos (nós de escolha/fim) e exige ao menos uma bifurcação.
+        const normalized = normalizeGraph(body.nodes as never[], body.edges as never[]);
+        const graph: InteractiveGraph = { ...body, nodes: normalized.nodes, edges: normalized.edges };
+        const blocking = getBlockingErrors(validateGraph(graph.nodes, graph.edges));
+        if (blocking.length > 0) {
+            return res.status(422).json({
+                error: blocking[0].message,
+                code: 'GRAPH_NOT_SAVABLE',
+                errors: blocking,
             });
         }
 

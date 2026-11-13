@@ -9,11 +9,9 @@ export const videoController = {
         const videoUrl = (node.data as any).videoUrl;
 
         if (!videoUrl) {
-            console.warn('⚠️ Nó sem videoUrl');
             return;
         }
 
-        console.log(`▶️ Reproduzindo: ${node.data.label}`);
 
         try {
             if (withTransition && seekToTime === undefined) {
@@ -49,9 +47,7 @@ export const videoController = {
         })).filter(choice => choice.videoUrl);
 
         if (choicesToPreload.length > 0) {
-            preloadService.preloadChoices(choicesToPreload).catch(err => {
-                console.warn('⚠️ Erro ao precarregar escolhas:', err);
-            });
+            preloadService.preloadChoices(choicesToPreload).catch(() => { });
         }
     }
 };

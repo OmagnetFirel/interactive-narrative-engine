@@ -6,12 +6,12 @@ const PREFIX = '[Player]';
 
 /** Ative com `localStorage.setItem('playerDebug', '1')` ou `?debug=1` na URL */
 export function isPlayerDebugEnabled(): boolean {
-    if (typeof window === 'undefined') return true;
+    if (typeof window === 'undefined') return false;
     try {
         if (new URLSearchParams(window.location.search).get('debug') === '1') return true;
         return localStorage.getItem('playerDebug') === '1';
     } catch {
-        return true;
+        return false;
     }
 }
 

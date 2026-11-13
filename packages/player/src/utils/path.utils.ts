@@ -4,7 +4,6 @@ import { state } from '../core/state';
 /**
  * Percorre o grafo a partir de um nó e coleta vídeos em sequência linear até:
  * - bifurcação (múltiplas saídas)
- * - nó de escolha que já tem vídeo (pausa narrativa)
  * - fim do caminho
  */
 export function calculateVideoPathUntilBranch(startNode: GraphNode): GraphNode[] {
@@ -21,11 +20,7 @@ export function calculateVideoPathUntilBranch(startNode: GraphNode): GraphNode[]
 
         const outgoing = state.currentGraph.edges.filter(e => e.source === currentNode!.id);
 
-        if (outgoing.length === 0 || currentNode.type === 'end') {
-            break;
-        }
-
-        if (currentNode.type === 'choice' && hasVideo) {
+        if (outgoing.length === 0) {
             break;
         }
 

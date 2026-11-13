@@ -34,11 +34,6 @@ export async function retryWithBackoff<T>(
                     finalConfig.maxDelay
                 );
 
-                console.warn(
-                    `⚠️ Tentativa ${attempt + 1}/${finalConfig.maxAttempts} falhou. ` +
-                    `Retry em ${delay}ms...`,
-                    error
-                );
 
                 await sleep(delay);
             }

@@ -96,6 +96,9 @@ importers:
       axios:
         specifier: ^1.13.2
         version: 1.13.2
+      hls.js:
+        specifier: ^1.6.15
+        version: 1.6.15
       react:
         specifier: ^19.2.0
         version: 19.2.3

@@ -1,14 +1,14 @@
 import type { GraphNode, InteractiveGraph } from '../core/types';
 import { state, resetState } from '../core/state';
 import { dom } from '../ui/dom-elements';
-import { hideChoices, hideEnd, showEndOverlay } from '../ui/overlay.ui';
+import { hideChoices, hideEnd, showEndOverlay, showWaitingForChoice } from '../ui/overlay.ui';
 import { videoController } from './video.controller';
 import { showChoicesDuringVideo } from './choices.controller';
 import { hlsService } from '../services/hls.service';
 import { timelineService } from '../services/timeline.service';
 import { extractVideoId } from '../utils/format.utils';
 import { calculateVideoPathUntilBranch, getChoiceBeforeEndSeconds } from '../utils/path.utils';
-import { STITCHED_PREFETCH_LEAD_SEC, STITCHED_TRANSITION_LEAD_SEC, STITCHED_MIN_PLAY_BEFORE_TRANSITION_SEC } from '../core/config';
+import { STITCHED_PREFETCH_LEAD_SEC, STITCHED_TRANSITION_LEAD_SEC, STITCHED_MIN_PLAY_BEFORE_TRANSITION_SEC, CHOICE_PAUSE_LEAD_SEC } from '../core/config';
 import { debugLog, logPlayerState, logVideoElement } from '../utils/debug.util';
 
 /** Evita disparos duplicados de continuação linear em playlists EVENT. */
@@ -34,8 +34,6 @@ export function findInitialNode(graph: InteractiveGraph): GraphNode | null {
 }
 
 export function navigateToNode(node: GraphNode, seekToTime?: number): void {
-    console.log(`\n📍 ===== NAVEGANDO PARA: ${node.data.label} ${seekToTime !== undefined ? `(seek: ${seekToTime})` : ''} =====`);
-    console.log(`📊 Estado atual - Timeline length: ${state.virtualTimeline.length}, Stitched path: ${state.stitchedPath.length}`);
 
     state.currentNode = node;
 
@@ -44,6 +42,12 @@ export function navigateToNode(node: GraphNode, seekToTime?: number): void {
     }
 
     state.choicesShown = false;
+    state.waitingForChoice = false;
+    state.playbackFinished = false;
+
+    // Sempre limpar overlays antes de qualquer early-return (ex.: sessão HLS no Recomeçar).
+    hideChoices();
+    hideEnd();
 
     if (seekToTime === undefined) {
         state.nextNodeQueued = null;
@@ -52,7 +56,6 @@ export function navigateToNode(node: GraphNode, seekToTime?: number): void {
 
         // ✅ CORREÇÃO: Sempre calcular caminho sequencial se for vídeo E não estiver em stitched mode
         if (node.type === 'video' && !state.stitchedPlaylistUrl) {
-            console.log('🔍 Verificando se há caminho sequencial...');
             const sequentialPath = calculateSequentialPath(node);
 
             // ✅ Opção A: sessão EVENT quando há múltiplos vídeos em sequência OU quando
@@ -64,28 +67,16 @@ export function navigateToNode(node: GraphNode, seekToTime?: number): void {
                 (pathTail !== undefined && pathLeadsToChoice(pathTail));
 
             if (shouldUsePlaybackSession) {
-                console.log(`🎬 Iniciando sessão de playback com ${sequentialPath.length} vídeo(s)...`);
                 loadSequentialVideos(sequentialPath);
                 return; // ✅ IMPORTANTE: Não continuar execução normal
             } else {
-                console.log(`📹 Apenas 1 vídeo no caminho (linear), reprodução normal`);
                 // Construir timeline com apenas este vídeo
                 timelineService.buildVirtualTimeline([node]);
             }
         }
     }
 
-    updateNodeInfo();
-    hideChoices();
-    hideEnd();
-
-    if (node.type === 'video') {
-        videoController.playVideo(node, seekToTime);
-    } else if (node.type === 'choice') {
-        handleChoiceNode(node);
-    } else if (node.type === 'end') {
-        handleEndNode(node);
-    }
+    videoController.playVideo(node, seekToTime);
 
     if (seekToTime !== undefined) {
         state.isSeekingVirtual = false;
@@ -96,13 +87,7 @@ export function navigateToNode(node: GraphNode, seekToTime?: number): void {
  * ✅ CORREÇÃO: Calcular caminho sequencial incluindo ESCOLHAS COM VÍDEO
  */
 function calculateSequentialPath(startNode: GraphNode): GraphNode[] {
-    console.log('\n🔍 Calculando caminho sequencial...');
-    const path = calculateVideoPathUntilBranch(startNode);
-    for (const node of path) {
-        console.log(`  ✅ Adicionando: ${node.data.label} (${node.type})`);
-    }
-    console.log(`📦 Caminho calculado: ${path.length} vídeo(s) em sequência`);
-    return path;
+    return calculateVideoPathUntilBranch(startNode);
 }
 
 /**
@@ -118,8 +103,6 @@ export function pathLeadsToChoice(startNode: GraphNode | undefined): boolean {
 
     while (current && !seen.has(current.id)) {
         seen.add(current.id);
-
-        if (current.type === 'end') return false;
 
         const outgoing = state.currentGraph.edges.filter(e => e.source === current!.id);
         if (outgoing.length === 0) return false;
@@ -153,7 +136,6 @@ async function loadSequentialVideos(sequentialPath: GraphNode[]): Promise<void> 
 
             timelineService.buildVirtualTimeline(state.stitchedPath);
             state.currentNode = state.stitchedPath[0];
-            updateNodeInfo();
 
             debugLog('session', 'Sessão HLS criada no início', {
                 sessionId: session.sessionId,
@@ -169,7 +151,6 @@ async function loadSequentialVideos(sequentialPath: GraphNode[]): Promise<void> 
         }
 
         // Fallback: stitching legado (com reload) ou vídeo único
-        console.warn('⚠️ Falha ao criar sessão, tentando stitching legado...');
         const stitched = await apiService.preloadStitchedPlaylist(sequentialPath);
 
         if (stitched) {
@@ -177,10 +158,8 @@ async function loadSequentialVideos(sequentialPath: GraphNode[]): Promise<void> 
             state.stitchedPath = stitched.path;
             timelineService.buildVirtualTimeline(state.stitchedPath);
             state.currentNode = state.stitchedPath[0];
-            updateNodeInfo();
             await hlsService.loadStitchedPlaylist(state.stitchedPlaylistUrl);
         } else {
-            console.warn('⚠️ Falha no stitching, usando reprodução normal');
             timelineService.buildVirtualTimeline([sequentialPath[0]]);
             videoController.playVideo(sequentialPath[0]);
         }
@@ -222,14 +201,12 @@ async function resolveStitchedEndState(): Promise<void> {
     );
 
     if (outgoingEdges.length > 1) {
-        console.log('🔀 Múltiplas escolhas no fim da playlist');
         state.currentNode = lastNode;
         showChoicesDuringVideo(outgoingEdges, lastNode);
         return;
     }
 
-    if (lastNode.type === 'end' || outgoingEdges.length === 0) {
-        console.log('🏁 Fim da narrativa (stitched)');
+    if (outgoingEdges.length === 0) {
         finishStitchedEnd(lastNode);
         return;
     }
@@ -241,7 +218,6 @@ async function resolveStitchedEndState(): Promise<void> {
                 const continued = await continueStitchedPathIfNeeded();
                 if (continued) return;
             }
-            console.log(`➡️ Próximo nó após stitched: ${nextNode.data.label}`);
             navigateToNode(nextNode);
         }
     }
@@ -420,6 +396,16 @@ export function maybeFinalizeSessionNearEnd(): void {
 }
 
 export function handleTimeUpdate(): void {
+    if (state.playbackFinished) return;
+
+    // Aguardando a escolha do aluno: o vídeo fica parado perto do fim da cena.
+    if (state.waitingForChoice) {
+        if (!dom.video.paused) dom.video.pause();
+        return;
+    }
+
+    if (pauseIfChoicePending()) return;
+
     if (state.stitchedPlaylistUrl && state.stitchedPath.length > 0) {
         maybeFinalizeSessionNearEnd();
         timelineService.updateCurrentSegmentByTime(dom.video.currentTime);
@@ -558,6 +544,8 @@ export function handleVideoEnded(): void {
     logPlayerState('no evento ended');
 
     // ✅ Em modo stitched: se ainda há segmentos na timeline virtual, é fim de trecho — não fim da história
+    if (state.playbackFinished || state.waitingForChoice) return;
+
     if (state.stitchedPath.length > 0 && state.stitchedPlaylistUrl) {
         if (state.currentSegmentIndex < state.virtualTimeline.length - 1) {
             debugLog('ended', 'Fim de segmento (não fim virtual) — avançando');
@@ -568,7 +556,6 @@ export function handleVideoEnded(): void {
 
     // ✅ Modo normal (sem stitching) - processar próximo nó
     if (!state.currentGraph || !state.currentNode) {
-        console.log('⚠️ Sem grafo ou nó atual');
         return;
     }
 
@@ -576,24 +563,19 @@ export function handleVideoEnded(): void {
         edge => edge.source === state.currentNode?.id
     ) || [];
 
-    console.log(`🔍 Processando próximo nó (${outgoingEdges.length} edges)`);
 
     if (outgoingEdges.length === 0) {
-        console.log('🏁 Fim da narrativa (sem edges)');
         handleEndNode(state.currentNode);
     } else if (outgoingEdges.length === 1) {
         const nextNode = state.currentGraph.nodes.find(n => n.id === outgoingEdges[0].target);
         if (nextNode) {
-            console.log(`➡️ Próximo nó: ${nextNode.data.label}`);
             navigateToNode(nextNode);
         }
     } else if (!state.hasChosenDuringVideo) {
-        // Múltiplas escolhas mas usuário não escolheu - usar primeira
-        console.log('🔀 Usando primeira opção (timeout)');
-        const nextNode = state.currentGraph.nodes.find(n => n.id === outgoingEdges[0].target);
-        if (nextNode) {
-            navigateToNode(nextNode);
-        }
+        // Bifurcação sem escolha: mantém as opções na tela e espera o aluno.
+        showChoicesDuringVideo(outgoingEdges, state.currentNode);
+        state.waitingForChoice = true;
+        showWaitingForChoice();
     }
 }
 
@@ -601,86 +583,65 @@ export function handleRestart(): void {
     if (state.currentGraph) {
         const initialNode = findInitialNode(state.currentGraph);
         if (initialNode) {
+            hideChoices();
+            hideEnd();
             resetState();
             navigateToNode(initialNode);
         }
     }
 }
 
-function handleChoiceNode(node: GraphNode): void {
-    const videoUrl = (node.data as any).videoUrl;
-
-    if (videoUrl && videoUrl.trim()) {
-        // Tem vídeo de transição, reproduzir normalmente
-        videoController.playVideo(node);
-    } else {
-        // ✅ CORREÇÃO: Sem vídeo de transição
-        const outgoingEdges = state.currentGraph!.edges.filter(edge => edge.source === node.id);
-
-        console.log(`🔀 Nó de escolha sem vídeo: ${node.data.label} (${outgoingEdges.length} opções)`);
-
-        if (outgoingEdges.length === 0) {
-            console.log('⚠️ Nó de escolha sem edges, tratando como fim');
-            handleEndNode(node);
-        } else if (outgoingEdges.length === 1) {
-            // ✅ Apenas 1 opção: pular automaticamente para o próximo nó
-            console.log('➡️ Apenas 1 opção, pulando automaticamente...');
-            const nextNode = state.currentGraph!.nodes.find(n => n.id === outgoingEdges[0].target);
-            if (nextNode) {
-                navigateToNode(nextNode);
-            }
-        } else {
-            // Múltiplas opções: mostrar escolhas imediatamente
-            console.log('🔀 Múltiplas opções, mostrando escolhas');
-            showChoicesDuringVideo(outgoingEdges);
-        }
-    }
-}
-
+/**
+ * Encerra a aula: pausa, impede que chamadas assíncronas em andamento voltem
+ * a dar play (o áudio continuava tocando atrás do overlay) e mostra o fim.
+ */
 function finishStitchedEnd(node: GraphNode): void {
-    if (state.sessionId) {
-        void hlsService.endSession();
-    }
-
-    dom.video.pause();
+    stopPlayback();
     showEndOverlay(node);
 }
 
 function handleEndNode(node: GraphNode): void {
-    const videoUrl = (node.data as any).videoUrl;
+    // A cena final já foi reproduzida; não tocar o vídeo de novo.
+    finishStitchedEnd(node);
+}
 
-    // Em modo stitched o vídeo final já foi reproduzido na playlist concatenada
-    if (state.stitchedPlaylistUrl && state.virtualTimeline.some(seg => seg.node.id === node.id)) {
-        finishStitchedEnd(node);
-        return;
-    }
-
-    // ✅ Garantir que a sessão (se houver) seja encerrada (ENDLIST) ao chegar no fim.
-    if (state.sessionId) {
+export function stopPlayback(): void {
+    state.playbackFinished = true;
+    state.waitingForChoice = false;
+    hideChoices();
+    dom.video.pause();
+    if (state.sessionId && !state.sessionFinalizeRequested) {
+        state.sessionFinalizeRequested = true;
         void hlsService.endSession();
-    }
-
-    if (videoUrl) {
-        videoController.playVideo(node);
-        dom.video.addEventListener(
-            'ended',
-            () => {
-                showEndOverlay(node);
-            },
-            { once: true }
-        );
-    } else {
-        dom.video.pause();
-        showEndOverlay(node);
     }
 }
 
-function updateNodeInfo(): void {
-    dom.currentNodeSpan.textContent = state.currentNode?.data.label || '';
-    dom.pathHistorySpan.textContent = state.pathHistory
-        .map(id => {
-            const n = state.currentGraph?.nodes.find(n => n.id === id);
-            return n?.data.label || id.slice(0, 8);
-        })
-        .join(' → ');
+/**
+ * Se as escolhas estão na tela e o aluno ainda não escolheu, pausa o vídeo
+ * pouco antes do fim da cena (não existe caminho padrão).
+ */
+function pauseIfChoicePending(): boolean {
+    if (!state.choicesShown || state.hasChosenDuringVideo || !state.currentNode) return false;
+
+    let referenceEnd = dom.video.duration;
+    if (state.stitchedPlaylistUrl && state.virtualTimeline.length > 0) {
+        const current = state.virtualTimeline[state.currentSegmentIndex];
+        const segment = current?.node.id === state.currentNode.id
+            ? current
+            : state.virtualTimeline.find(seg => seg.node.id === state.currentNode!.id);
+        if (segment) referenceEnd = segment.startTime + segment.duration;
+    }
+    if (!referenceEnd || !Number.isFinite(referenceEnd)) return false;
+
+    if (dom.video.currentTime >= referenceEnd - CHOICE_PAUSE_LEAD_SEC) {
+        dom.video.pause();
+        state.waitingForChoice = true;
+        showWaitingForChoice();
+        debugLog('choice', 'Sem escolha a tempo — vídeo pausado aguardando o aluno', {
+            currentTime: Number(dom.video.currentTime.toFixed(3)),
+            referenceEnd: Number(referenceEnd.toFixed(3)),
+        });
+        return true;
+    }
+    return false;
 }

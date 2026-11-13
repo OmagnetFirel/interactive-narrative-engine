@@ -6,6 +6,7 @@ import { timelineService } from '../services/timeline.service';
 import { hlsService } from '../services/hls.service';
 import { calculateVideoPathUntilBranch } from '../utils/path.utils';
 import { debugLog, logPlayerState, logVideoElement } from '../utils/debug.util';
+import { CHOICE_PAUSE_LEAD_SEC } from '../core/config';
 
 export function showChoicesDuringVideo(edges: GraphEdge[], decisionNode?: GraphNode): void {
     if (edges.length <= 1) return;
@@ -57,28 +58,23 @@ export function showChoicesDuringVideo(edges: GraphEdge[], decisionNode?: GraphN
     dom.choicesTitle.textContent = 'Faça sua escolha:';
     dom.choicesOverlay.classList.remove('hidden');
 
-    const timeRemaining = referenceEnd - dom.video.currentTime;
-    const timeout = Math.min(timeRemaining - 0.5, (node.data as { timeout?: number })?.timeout || timeRemaining);
-
-    if (timeout > 0) {
-        startTimeoutDuringVideo(timeout, edges[0]);
+    // Barra apenas visual: mostra quanto falta até o vídeo pausar esperando a escolha.
+    // Não existe escolha automática.
+    const timeUntilPause = referenceEnd - CHOICE_PAUSE_LEAD_SEC - dom.video.currentTime;
+    if (timeUntilPause > 0.5) {
+        startCountdownBar(timeUntilPause);
     }
 }
 
-function startTimeoutDuringVideo(seconds: number, defaultEdge: GraphEdge): void {
+function startCountdownBar(seconds: number): void {
     dom.timeoutBar.classList.remove('hidden');
-    dom.timeoutProgress.style.transition = `width ${seconds}s linear`;
+    dom.timeoutProgress.style.transition = 'none';
+    dom.timeoutProgress.style.width = '100%';
 
     setTimeout(() => {
+        dom.timeoutProgress.style.transition = `width ${seconds}s linear`;
         dom.timeoutProgress.style.width = '0%';
     }, 50);
-
-    state.timeoutId = window.setTimeout(() => {
-        if (!state.hasChosenDuringVideo) {
-            console.log(`⏰ Timeout! Escolha automática`);
-            handleChoiceDuringVideo(defaultEdge);
-        }
-    }, seconds * 1000);
 }
 
 /**
@@ -101,6 +97,10 @@ async function handleChoiceDuringVideo(edge: GraphEdge): Promise<void> {
     state.choiceResolvedNodeId = state.currentNode?.id ?? edge.source;
     state.choicesShown = false;
     hideChoices();
+
+    // Se o vídeo estava parado esperando a decisão, ele volta a tocar após anexar o trecho escolhido.
+    const wasWaiting = state.waitingForChoice;
+    state.waitingForChoice = false;
 
     // Limpar timeout se existir
     if (state.timeoutId) {
@@ -126,6 +126,7 @@ async function handleChoiceDuringVideo(edge: GraphEdge): Promise<void> {
 
     if (pathFromChoice.length === 0) {
         debugLog('choice', 'AVISO: nenhum vídeo no caminho escolhido');
+        if (wasWaiting) await dom.video.play().catch(() => { });
         return;
     }
 
@@ -153,4 +154,8 @@ async function handleChoiceDuringVideo(edge: GraphEdge): Promise<void> {
     logPlayerState('após append HLS');
 
     state.nextNodeQueued = nextNode;
+
+    if (wasWaiting && !state.playbackFinished) {
+        await dom.video.play().catch(() => { });
+    }
 }

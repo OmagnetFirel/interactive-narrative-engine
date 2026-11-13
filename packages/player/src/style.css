@@ -1063,3 +1063,41 @@ body {
   content: " ✓";
   float: right;
 }
+
+/* Vídeo pausado aguardando a escolha do aluno */
+#choices-title.visible {
+  display: block;
+  margin-bottom: 16px;
+  text-align: center;
+  color: #fff;
+  font-size: 20px;
+  font-weight: 600;
+  text-shadow: 0 2px 6px rgba(0, 0, 0, 0.8);
+  animation: slideUpFade 0.3s ease-out forwards;
+}
+
+/* Aviso antes de iniciar (conteúdo gerado por IA / foco do teste) */
+.panel-notice {
+  max-width: 560px;
+  text-align: left;
+}
+.panel-notice h2 {
+  text-align: center;
+  margin-bottom: 16px;
+}
+.panel-notice .notice-icon {
+  font-size: 44px;
+  text-align: center;
+  margin-bottom: 8px;
+}
+.panel-notice .landing-text {
+  margin-bottom: 14px;
+}
+.panel-notice .landing-text strong {
+  color: var(--text);
+}
+.panel-notice #notice-ok-btn {
+  display: block;
+  width: 100%;
+  margin-top: 10px;
+}

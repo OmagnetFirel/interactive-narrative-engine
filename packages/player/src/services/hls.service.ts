@@ -137,7 +137,6 @@ export class HlsService {
                 const currentTime = dom.video.currentTime;
 
                 if (currentTime < bufferStart && bufferStart - currentTime < 1.0) {
-                    console.log(`🔄 Auto-fix: currentTime ${currentTime.toFixed(3)}s → ${bufferStart.toFixed(3)}s`);
                     dom.video.currentTime = bufferStart;
                 }
             }
@@ -156,7 +155,6 @@ export class HlsService {
 
         // Caso 1: currentTime está ANTES do buffer (gap inicial)
         if (currentTime < bufferStart && bufferStart - currentTime < 2.0) {
-            console.log(`🔄 Corrigindo gap inicial: ${currentTime.toFixed(3)}s → ${bufferStart.toFixed(3)}s`);
             dom.video.currentTime = bufferStart + 0.01; // Pequeno offset para garantir
             return true;
         }
@@ -167,7 +165,6 @@ export class HlsService {
             const nextRangeStart = dom.video.buffered.start(i + 1);
 
             if (currentTime >= rangeEnd && currentTime < nextRangeStart) {
-                console.log(`🔄 Corrigindo gap no meio: ${currentTime.toFixed(3)}s → ${nextRangeStart.toFixed(3)}s`);
                 dom.video.currentTime = nextRangeStart + 0.01;
                 return true;
             }
@@ -175,7 +172,6 @@ export class HlsService {
 
         // Caso 3: currentTime está DEPOIS do buffer (ficou para trás)
         if (currentTime > bufferEnd) {
-            console.log(`🔄 currentTime além do buffer, voltando para ${bufferEnd.toFixed(3)}s`);
             dom.video.currentTime = bufferEnd - 0.5;
             return true;
         }
@@ -197,34 +193,15 @@ export class HlsService {
 
         // Rastrear mudanças de qualidade
         this.hls.on(Hls.Events.LEVEL_SWITCHED, (_event, data) => {
-            const level = this.hls!.levels[data.level];
-            console.log(`📊 Qualidade alterada: ${level.height}p`);
-
             this.levelSwitchedCallbacks.forEach(cb => cb(data.level));
         });
 
-        // Rastrear fragmentos carregados
-        this.hls.on(Hls.Events.FRAG_LOADED, (_event, data) => {
-            const stats = data.frag.stats;
-            const bitrate = (stats.total * 8 / data.frag.duration / 1000).toFixed(0);
-            console.log(`✅ Fragmento carregado: ${bitrate} kbps`);
-        });
-
-        // Detectar buffering
-        this.hls.on(Hls.Events.BUFFER_APPENDING, () => {
-            console.log('🔄 Buffer appending...');
-        });
-
-        this.hls.on(Hls.Events.BUFFER_APPENDED, () => {
-            console.log('✅ Buffer appended');
-        });
     }
 
     /**
      * ✅ RACE CONDITION FIX - Carregar vídeo com Promise e cleanup
      */
     async loadVideo(videoUrl: string, seekToTime?: number): Promise<void> {
-        console.log(`▶️ Reproduzindo vídeo: ${videoUrl}`);
 
         // ✅ CORREÇÃO: Pausar e aguardar antes de destruir
         if (!dom.video.paused) {
@@ -268,7 +245,6 @@ export class HlsService {
                     this.hls!.on(Hls.Events.ERROR, onError);
                 });
 
-                console.log('✅ Manifest carregado');
 
                 // ✅ NOVO: Aguardar buffer inicial antes de dar play
                 await this.waitForInitialBuffer();
@@ -290,7 +266,6 @@ export class HlsService {
                     if (playError.name !== 'AbortError') {
                         throw playError;
                     }
-                    console.warn('⚠️ Play abortado (normal durante transições)');
                 }
 
                 // Remover fade-in após animação
@@ -342,7 +317,6 @@ export class HlsService {
 
             const checkBuffer = () => {
                 if (Date.now() - startTime > maxWait) {
-                    console.warn('⚠️ Timeout aguardando buffer inicial, continuando mesmo assim...');
                     resolve();
                     return;
                 }
@@ -356,7 +330,6 @@ export class HlsService {
                     if (bufferLength >= 1.0) {
                         // ✅ CRÍTICO: Pular gap inicial ANTES de dar play
                         if (bufferStart > 0 && bufferStart < 0.5) {
-                            console.log(`🎯 Pulando gap inicial: 0s → ${bufferStart.toFixed(3)}s`);
                             dom.video.currentTime = bufferStart;
                         }
                         resolve();
@@ -376,8 +349,6 @@ export class HlsService {
      * ✅ Carregar playlist stitched com tratamento melhorado e FALLBACK
      */
     async loadStitchedPlaylist(playlistUrl: string, onError?: () => void): Promise<void> {
-        console.log(`\n▶️ ===== REPRODUZINDO PLAYLIST STITCHED =====`);
-        console.log(`URL: ${playlistUrl}`);
 
         // ✅ NOVO: Registrar callback de fallback
         this.onStitchingFailed = onError;
@@ -422,7 +393,6 @@ export class HlsService {
                         this.hls!.on(Hls.Events.ERROR, onErrorHandler);
                     });
 
-                    console.log('✅ Playlist stitched carregada, aguardando buffer...');
 
                     // ✅ CRÍTICO: Aguardar buffer ter conteúdo SUFICIENTE antes de iniciar
                     await new Promise<void>((resolve, reject) => {
@@ -440,22 +410,18 @@ export class HlsService {
                                 const bufferEnd = dom.video.buffered.end(0);
                                 const bufferLength = bufferEnd - bufferStart;
 
-                                console.log(`📊 Buffer: start=${bufferStart.toFixed(3)}s, end=${bufferEnd.toFixed(3)}s, length=${bufferLength.toFixed(2)}s`);
 
                                 // ✅ Aguardar pelo menos 2 segundos de buffer
                                 if (bufferLength >= 2.0) {
                                     // ✅ CORREÇÃO: Iniciar no ponto real do buffer (pula gap inicial)
                                     if (bufferStart > 0 && bufferStart < 1.0) {
-                                        console.log(`🎯 Iniciando playback em ${bufferStart.toFixed(3)}s (pulando gap inicial)`);
                                         dom.video.currentTime = bufferStart;
                                     } else {
-                                        console.log(`🎯 Iniciando playback em 0s (sem gap)`);
                                         dom.video.currentTime = 0;
                                     }
                                     resolve();
                                 } else {
                                     // Aguardar mais buffer
-                                    console.log(`⏳ Aguardando mais buffer... (${bufferLength.toFixed(2)}s/2.0s)`);
                                     setTimeout(checkBuffer, 200);
                                 }
                             } else {
@@ -469,11 +435,7 @@ export class HlsService {
 
                     // ✅ CORREÇÃO: Garantir que o vídeo está tocando
                     if (dom.video.paused) {
-                        console.log('▶️ Iniciando playback...');
                         await dom.video.play();
-                        console.log('✅ Playback iniciado com sucesso');
-                    } else {
-                        console.log('✅ Vídeo já está tocando, continuando...');
                     }
 
                     // ✅ Limpar callback de fallback após sucesso
@@ -526,10 +488,8 @@ export class HlsService {
      * mas todas as escolhas seguintes passam a ser seamless).
      */
     async appendToCurrentPlaylist(nodePath: GraphNode[]): Promise<boolean> {
-        console.log(`\n🎬 ===== EXPANDINDO REPRODUÇÃO =====`);
 
         if (nodePath.length === 0) {
-            console.warn('⚠️ Nenhum nó para adicionar');
             return false;
         }
 
@@ -547,7 +507,6 @@ export class HlsService {
         }
 
         if (videoIds.length === 0) {
-            console.warn('⚠️ Nenhum videoId válido encontrado');
             return false;
         }
 
@@ -558,7 +517,6 @@ export class HlsService {
                 // Obs.: state.stitchedPath/virtualTimeline já foram estendidos por
                 // timelineService.appendToTimeline antes desta chamada.
                 this.lastSeamlessAppendAt = Date.now();
-                console.log(`✅ Anexado à sessão (seamless, sem reload). hls.js (EVENT) vai assimilar os novos segmentos.`);
 
                 await this.refreshEventPlaylist();
                 const nextSegStart = state.virtualTimeline[state.currentSegmentIndex + 1]?.startTime;
@@ -571,7 +529,6 @@ export class HlsService {
                 }
                 return true;
             }
-            console.warn(`⚠️ Append de sessão falhou (status ${result.status}), usando fallback de stitching com reload.`);
             if (result.status === 422 || result.status === 409) {
                 console.error('❌ Vídeos incompatíveis ou resolução divergente — execute POST /api/videos/retranscode-all');
                 return false;
@@ -605,11 +562,9 @@ export class HlsService {
             if (wasPlaying && dom.video.paused) {
                 await dom.video.play().catch(() => { });
             }
-            console.log(`✅ Sessão criada e carregada. Próximas escolhas serão seamless.`);
             return true;
         }
 
-        console.warn('⚠️ Falha ao criar sessão, usando fallback de stitching com reload.');
         return this.appendViaStitch(nodePath);
     }
 
@@ -667,7 +622,6 @@ export class HlsService {
         if (!state.sessionId) return;
         const { apiService } = await import('./api.service');
         await apiService.endSession(state.sessionId);
-        console.log(`🔚 Sessão ${state.sessionId} encerrada (ENDLIST).`);
     }
 
     /**
@@ -705,10 +659,8 @@ export class HlsService {
      * a fonte (causa a "piscada"). Usado apenas quando a sessão seamless falha.
      */
     private async appendViaStitch(nodePath: GraphNode[]): Promise<boolean> {
-        console.log(`\n🎬 ===== EXPANDINDO PLAYLIST (LEGADO/RELOAD) =====`);
 
         if (nodePath.length === 0) {
-            console.warn('⚠️ Nenhum nó para adicionar');
             return false;
         }
 
@@ -732,14 +684,12 @@ export class HlsService {
             }
 
             if (videoIds.length === 0) {
-                console.warn('⚠️ Nenhum videoId válido encontrado');
                 return false;
             }
 
             // ✅ Se ainda não temos uma playlist stitched, criar uma nova
             // com o vídeo atual + os novos vídeos
             if (!state.stitchedPlaylistUrl) {
-                console.log('📝 Criando nova playlist stitched...');
 
                 // Incluir vídeo atual se existir
                 const currentVideoUrl = (state.currentNode?.data as any)?.videoUrl;
@@ -766,7 +716,6 @@ export class HlsService {
                     state.stitchedPath = [...state.stitchedPath, ...nodePath];
                 }
 
-                console.log(`✅ Nova playlist criada com ${allVideoIds.length} vídeos`);
 
                 // ✅ CRÍTICO: Carregar nova playlist SEM interromper
                 // Guardar posição atual
@@ -785,7 +734,6 @@ export class HlsService {
             }
 
             // ✅ Se já temos playlist stitched, precisamos criar uma nova expandida
-            console.log('📝 Expandindo playlist stitched existente...');
 
             // Pegar todos os videoIds atuais + novos
             const currentVideoIds: string[] = [];
@@ -813,7 +761,6 @@ export class HlsService {
             state.stitchedPlaylistUrl = newPlaylistUrl;
             state.stitchedPath = [...state.stitchedPath, ...nodePath];
 
-            console.log(`✅ Playlist expandida para ${allVideoIds.length} vídeos`);
 
             // ✅ CRÍTICO: Carregar playlist expandida mantendo posição
             await this.loadStitchedPlaylistSeamless(newPlaylistUrl, currentTime);
@@ -835,10 +782,8 @@ export class HlsService {
      * ✅ NOVO: Carregar playlist stitched mantendo posição atual (seamless)
      */
     private async loadStitchedPlaylistSeamless(playlistUrl: string, seekToTime: number): Promise<void> {
-        console.log(`🔄 Carregando playlist seamless em ${seekToTime.toFixed(2)}s...`);
 
         if (!Hls.isSupported()) {
-            console.warn('⚠️ HLS não suportado, usando fallback');
             dom.video.src = playlistUrl;
             dom.video.currentTime = seekToTime;
             return;
@@ -888,7 +833,6 @@ export class HlsService {
                 dom.video.classList.remove('fading-in');
             }, 400);
 
-            console.log(`✅ Playlist carregada, continuando em ${seekToTime.toFixed(2)}s`);
         } else {
             // Se não tem instância, criar uma nova
             await this.loadStitchedPlaylist(playlistUrl);
@@ -901,7 +845,6 @@ export class HlsService {
      */
     destroyHls(): void {
         if (this.hls) {
-            console.log('🗑️ Destruindo instância HLS...');
 
             // Remover todos os listeners
             this.hls.off(Hls.Events.ERROR);
@@ -915,7 +858,6 @@ export class HlsService {
             this.hls.destroy();
             this.hls = null;
 
-            console.log('✅ HLS destruído');
         }
     }
 
@@ -923,7 +865,6 @@ export class HlsService {
      * ✅ Destruir completamente o serviço
      */
     destroy(): void {
-        console.log('🗑️ Destruindo HLS Service...');
         this.destroyHls();
     }
 
@@ -931,15 +872,12 @@ export class HlsService {
      * ✅ Tratamento de erro fatal com recovery
      */
     private handleFatalError(data: any): void {
-        console.log(`🔄 Tratando erro fatal: ${data.type}`);
 
         switch (data.type) {
             case Hls.ErrorTypes.NETWORK_ERROR:
-                console.log('🌐 Tentando recuperar erro de rede...');
                 this.hls?.startLoad();
                 break;
             case Hls.ErrorTypes.MEDIA_ERROR:
-                console.log('🎥 Tentando recuperar erro de mídia...');
                 this.hls?.recoverMediaError();
                 break;
             default:
