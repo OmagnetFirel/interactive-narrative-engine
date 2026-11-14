@@ -47,10 +47,19 @@ export function showChoicesDuringVideo(edges: GraphEdge[], decisionNode?: GraphN
 
     dom.choicesButtons.innerHTML = '';
 
-    edges.forEach((edge) => {
+    edges.forEach((edge, index) => {
         const button = document.createElement('button');
         button.className = 'choice-button';
-        button.textContent = edge.label || edge.data?.label || 'Continuar';
+        // Atalho de teclado: 1, 2, 3… (até 9 opções)
+        if (index < 9) {
+            const key = document.createElement('span');
+            key.className = 'choice-key';
+            key.textContent = String(index + 1);
+            key.setAttribute('aria-hidden', 'true');
+            button.appendChild(key);
+            button.setAttribute('aria-keyshortcuts', String(index + 1));
+        }
+        button.appendChild(document.createTextNode(edge.label || edge.data?.label || 'Continuar'));
         button.addEventListener('click', () => handleChoiceDuringVideo(edge));
         dom.choicesButtons.appendChild(button);
     });
@@ -64,6 +73,21 @@ export function showChoicesDuringVideo(edges: GraphEdge[], decisionNode?: GraphN
     if (timeUntilPause > 0.5) {
         startCountdownBar(timeUntilPause);
     }
+}
+
+/** Teclas 1–9 escolhem a opção correspondente enquanto as escolhas estão na tela. */
+export function setupChoiceShortcuts(): void {
+    document.addEventListener('keydown', (event) => {
+        if (!state.choicesShown || event.ctrlKey || event.metaKey || event.altKey) return;
+        const target = event.target as HTMLElement | null;
+        if (target && ['INPUT', 'TEXTAREA', 'SELECT'].includes(target.tagName)) return;
+        const index = Number(event.key) - 1;
+        if (!Number.isInteger(index) || index < 0) return;
+        const button = dom.choicesButtons.querySelectorAll<HTMLButtonElement>('.choice-button')[index];
+        if (!button) return;
+        event.preventDefault();
+        button.click();
+    });
 }
 
 function startCountdownBar(seconds: number): void {

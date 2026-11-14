@@ -7,6 +7,7 @@ import {
   useStore,
   type EdgeProps,
 } from '@xyflow/react';
+import { IconPencil } from '@tabler/icons-react';
 
 /**
  * Conexão entre cenas. Quando sai de uma bifurcação, o rótulo é o texto da
@@ -95,7 +96,12 @@ export function ChoiceEdge({
                 className={`choice-edge-label ${text ? '' : 'is-empty'} ${selected ? 'is-selected' : ''}`}
                 title="Duplo clique para editar o texto da escolha"
               >
-                {text || '✎ texto da escolha'}
+                {text || (
+                  <span className="inline-flex items-center gap-1">
+                    <IconPencil size={12} stroke={2} aria-hidden="true" />
+                    texto da escolha
+                  </span>
+                )}
               </button>
             )}
           </div>

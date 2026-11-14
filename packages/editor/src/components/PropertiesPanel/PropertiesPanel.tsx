@@ -3,6 +3,7 @@ import type { Node, Edge } from '@xyflow/react';
 import { DEFAULT_CHOICE_BEFORE_END, getSceneRoles, type SceneNodeData } from '@ine/shared';
 import { VideoUploadModal, type UploadedVideoInfo } from '../VideoUpload/VideoUploadModal';
 import { formatDuration } from '../../utils/media';
+import { IconArrowsSplit2, IconTrash, IconFlag, IconPlayerPlay, IconPointer, IconRoute, IconUpload, IconVideo } from '@tabler/icons-react';
 
 interface PropertiesPanelProps {
   selectedNode: Node | null;
@@ -47,7 +48,7 @@ export function PropertiesPanel({
   if (!selectedNode && !selectedEdge) {
     return (
       <div className="p-6 text-center text-text-secondary">
-        <div className="text-4xl mb-3">👆</div>
+        <IconPointer size={32} stroke={1.5} className="mx-auto mb-3 text-copper-light" aria-hidden="true" />
         <div className="text-sm font-medium text-text">Nenhum elemento selecionado</div>
         <div className="text-xs mt-1">Clique em uma cena para editar. Para mudar o texto de uma escolha, dê duplo clique nela.</div>
       </div>
@@ -72,19 +73,20 @@ export function PropertiesPanel({
     return (
       <div className="p-5 space-y-4">
         <div className="flex items-center justify-between">
-          <h3 className="text-lg font-semibold text-text">🎬 Cena</h3>
+          <h3 className="text-lg font-semibold text-text flex items-center gap-2"><IconVideo size={20} stroke={1.75} aria-hidden="true" />Cena</h3>
           <button
             onClick={() => onDeleteNode(selectedNode.id)}
-            className="px-3 py-1.5 text-xs font-medium text-danger hover:bg-danger/10 rounded-lg transition-colors"
+            className="px-3 py-1.5 text-xs font-medium text-danger hover:bg-danger/10 rounded-lg transition-colors inline-flex items-center gap-1"
           >
-            🗑 Deletar
+            <IconTrash size={14} stroke={1.75} aria-hidden="true" />
+            Deletar
           </button>
         </div>
 
         <div className="flex flex-wrap gap-1">
-          {roles.isStart && <span className="scene-badge scene-badge-start">▶ Início</span>}
-          {roles.isBranch && <span className="scene-badge scene-badge-branch">🔀 Bifurcação</span>}
-          {roles.isEnd && <span className="scene-badge scene-badge-end">🏁 Final</span>}
+          {roles.isStart && <span className="scene-badge scene-badge-start"><IconPlayerPlay size={11} stroke={2.25} aria-hidden="true" />Início</span>}
+          {roles.isBranch && <span className="scene-badge scene-badge-branch"><IconArrowsSplit2 size={11} stroke={2.25} aria-hidden="true" />Bifurcação</span>}
+          {roles.isEnd && <span className="scene-badge scene-badge-end"><IconFlag size={11} stroke={2.25} aria-hidden="true" />Final</span>}
         </div>
 
         <div>
@@ -101,8 +103,9 @@ export function PropertiesPanel({
 
         <div>
           <label className="field-label">Vídeo</label>
-          <button type="button" onClick={() => setIsUploadModalOpen(true)} className="btn-secondary w-full">
-            📤 {data.videoUrl ? 'Trocar vídeo' : 'Enviar vídeo'}
+          <button type="button" onClick={() => setIsUploadModalOpen(true)} className="btn-secondary w-full inline-flex items-center justify-center gap-2">
+            <IconUpload size={17} stroke={1.75} aria-hidden="true" />
+            {data.videoUrl ? 'Trocar vídeo' : 'Enviar vídeo'}
           </button>
           <p className="text-xs text-text-secondary mt-1">
             {data.videoUrl
@@ -182,12 +185,13 @@ export function PropertiesPanel({
     return (
       <div className="p-5 space-y-4">
         <div className="flex items-center justify-between">
-          <h3 className="text-lg font-semibold text-text">🔗 Conexão</h3>
+          <h3 className="text-lg font-semibold text-text flex items-center gap-2"><IconRoute size={20} stroke={1.75} aria-hidden="true" />Conexão</h3>
           <button
             onClick={() => onDeleteEdge(selectedEdge.id)}
-            className="px-3 py-1.5 text-xs font-medium text-danger hover:bg-danger/10 rounded-lg transition-colors"
+            className="px-3 py-1.5 text-xs font-medium text-danger hover:bg-danger/10 rounded-lg transition-colors inline-flex items-center gap-1"
           >
-            🗑 Deletar
+            <IconTrash size={14} stroke={1.75} aria-hidden="true" />
+            Deletar
           </button>
         </div>
 

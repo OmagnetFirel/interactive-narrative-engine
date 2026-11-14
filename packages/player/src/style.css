@@ -1066,14 +1066,48 @@ body {
 
 /* Vídeo pausado aguardando a escolha do aluno */
 #choices-title.visible {
-  display: block;
-  margin-bottom: 16px;
-  text-align: center;
-  color: #fff;
-  font-size: 20px;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  width: fit-content;
+  max-width: 100%;
+  margin: 0 auto 16px;
+  padding: 10px 18px;
+  border-radius: 999px;
+  background: rgba(36, 23, 17, 0.88);
+  border: 1px solid rgba(217, 154, 91, 0.55);
+  color: #faf8f4;
+  font-size: 17px;
   font-weight: 600;
-  text-shadow: 0 2px 6px rgba(0, 0, 0, 0.8);
   animation: slideUpFade 0.3s ease-out forwards;
+}
+
+#choices-title .choices-title-icon {
+  display: inline-flex;
+  width: 22px;
+  height: 22px;
+  color: var(--accent);
+}
+
+#choices-title .choices-title-icon svg {
+  width: 100%;
+  height: 100%;
+}
+
+/* Atalho de teclado mostrado em cada opção (1, 2, 3…) */
+.choice-button .choice-key {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 22px;
+  height: 22px;
+  margin-right: 10px;
+  padding: 0 6px;
+  border-radius: 5px;
+  border: 1px solid rgba(255, 255, 255, 0.45);
+  font-size: 12px;
+  font-weight: 700;
+  vertical-align: 2px;
 }
 
 /* Aviso antes de iniciar (conteúdo gerado por IA / foco do teste) */
@@ -1100,4 +1134,25 @@ body {
   display: block;
   width: 100%;
   margin-top: 10px;
+}
+
+/* Ícones SVG (Tabler) */
+.panel-notice .notice-icon svg {
+  width: 44px;
+  height: 44px;
+  color: var(--primary);
+}
+#end-icon svg {
+  width: 72px;
+  height: 72px;
+  color: var(--accent);
+}
+#restart-button {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+}
+#restart-button svg {
+  width: 20px;
+  height: 20px;
 }

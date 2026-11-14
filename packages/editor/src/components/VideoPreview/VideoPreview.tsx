@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
 import Hls from 'hls.js';
 import { formatDuration, thumbnailFromVideoUrl } from '../../utils/media';
+import { IconPlayerPlay, IconX } from '@tabler/icons-react';
 
 /** Evento usado para garantir que só uma prévia toque por vez. */
 const PREVIEW_EVENT = 'branchplay:preview-play';
@@ -79,10 +80,11 @@ export function VideoPreview({ id, videoUrl, thumbnail, duration }: VideoPreview
           <button
             type="button"
             onClick={() => setPlaying(false)}
-            className="absolute top-1 right-1 w-6 h-6 rounded-full bg-black/60 text-white text-xs hover:bg-black/80"
+            className="absolute top-1 right-1 w-6 h-6 rounded-full bg-black/60 text-white hover:bg-black/80 flex items-center justify-center"
             title="Fechar prévia"
+            aria-label="Fechar prévia"
           >
-            ✕
+            <IconX size={14} stroke={2} aria-hidden="true" />
           </button>
         </>
       ) : (
@@ -101,8 +103,8 @@ export function VideoPreview({ id, videoUrl, thumbnail, duration }: VideoPreview
               draggable={false}
             />
           )}
-          <span className="relative w-10 h-10 rounded-full bg-black/55 text-white flex items-center justify-center text-lg group-hover:bg-copper group-hover:scale-105 transition">
-            ▶
+          <span className="relative w-10 h-10 rounded-full bg-black/55 text-white flex items-center justify-center group-hover:bg-copper group-hover:scale-105 transition">
+            <IconPlayerPlay size={18} stroke={2} className="ml-0.5" aria-hidden="true" />
           </span>
           {durationLabel && (
             <span className="absolute bottom-1 right-1 px-1.5 py-0.5 rounded bg-black/65 text-white text-[10px] font-semibold tabular-nums">

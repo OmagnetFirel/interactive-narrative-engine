@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react';
 import { createPortal } from 'react-dom';
+import { IconX } from '@tabler/icons-react';
 
 interface Step {
   gif: string;
@@ -83,7 +84,7 @@ export function TutorialModal({ open, onClose }: TutorialModalProps) {
             </h2>
           </div>
           <button onClick={close} className="text-text-secondary hover:text-text transition-colors" aria-label="Fechar">
-            ✕
+            <IconX size={20} stroke={1.75} aria-hidden="true" />
           </button>
         </div>
 

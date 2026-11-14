@@ -1,5 +1,5 @@
-import { useCallback, useEffect, useState, useMemo } from 'react';
-import { Link, useNavigate, useParams } from 'react-router-dom';
+import { useCallback, useEffect, useState, useMemo, useRef } from 'react';
+import { Link, useBlocker, useNavigate, useParams } from 'react-router-dom';
 import {
   ReactFlow,
   addEdge,
@@ -23,6 +23,7 @@ import { PropertiesPanel } from './components/PropertiesPanel/PropertiesPanel';
 import { ValidationPanel } from './components/ValidationPanel/ValidationPanel';
 import { TutorialModal } from './components/Tutorial/TutorialModal';
 import { useTutorial } from './components/Tutorial/useTutorial';
+import { IconCheck, IconDeviceFloppy, IconFileDescription, IconListCheck, IconLoader2 } from '@tabler/icons-react';
 
 const initialNodes: Node[] = [
   {
@@ -49,6 +50,22 @@ const initialEdges: Edge[] = [
   { id: 'e1-2', source: '1', target: '2', type: 'choice', label: 'Opção A', data: { label: 'Opção A' } },
   { id: 'e1-3', source: '1', target: '3', type: 'choice', label: 'Opção B', data: { label: 'Opção B' } },
 ];
+
+/** Retrato do que é salvo no projeto; usado para saber se há alterações não salvas. */
+function snapshotOf(name: string, visibility: ProjectVisibility, nodes: Node[], edges: Edge[]): string {
+  return JSON.stringify({
+    name,
+    visibility,
+    nodes: nodes.map((n) => ({ id: n.id, position: n.position, data: n.data })),
+    edges: edges.map((e) => ({ id: e.id, source: e.source, target: e.target, label: e.label ?? '' })),
+  });
+}
+
+function confirmDeleteScenes(labels: string[]): boolean {
+  if (labels.length === 0) return true;
+  const what = labels.length === 1 ? `a cena "${labels[0]}"` : `${labels.length} cenas`;
+  return window.confirm(`Deletar ${what}? As conexões ligadas a ela também serão removidas.`);
+}
 
 /** Garante que toda conexão use o componente de escolha editável. */
 function withChoiceEdgeType(edges: Edge[]): Edge[] {
@@ -95,6 +112,43 @@ export default function EditorWorkspace() {
   const [migrationNotice, setMigrationNotice] = useState(false);
   const [saveFeedback, setSaveFeedback] = useState<string | null>(null);
 
+  // Alterações não salvas: compara o estado atual com o último salvo/carregado.
+  const [savedSnapshot, setSavedSnapshot] = useState(() =>
+    snapshotOf('Minha História Interativa', 'public', initialNodes, initialEdges)
+  );
+  const currentSnapshot = useMemo(
+    () => snapshotOf(projectName, visibility, nodes, edges),
+    [projectName, visibility, nodes, edges]
+  );
+  const isDirty = loadState === 'idle' && currentSnapshot !== savedSnapshot;
+  const isDirtyRef = useRef(isDirty);
+  useEffect(() => {
+    isDirtyRef.current = isDirty;
+  }, [isDirty]);
+
+  useEffect(() => {
+    if (!isDirty) return;
+    const onBeforeUnload = (event: BeforeUnloadEvent) => {
+      event.preventDefault();
+      event.returnValue = '';
+    };
+    window.addEventListener('beforeunload', onBeforeUnload);
+    return () => window.removeEventListener('beforeunload', onBeforeUnload);
+  }, [isDirty]);
+
+  const blocker = useBlocker(
+    ({ currentLocation, nextLocation }) =>
+      isDirtyRef.current && currentLocation.pathname !== nextLocation.pathname
+  );
+  useEffect(() => {
+    if (blocker.state !== 'blocked') return;
+    if (window.confirm('Há alterações não salvas neste projeto. Sair mesmo assim e perder as alterações?')) {
+      blocker.proceed();
+    } else {
+      blocker.reset();
+    }
+  }, [blocker]);
+
   const nodeTypes = useMemo(() => ({ video: SceneNode }), []);
   const edgeTypes = useMemo(() => ({ choice: ChoiceEdge }), []);
 
@@ -130,6 +184,7 @@ export default function EditorWorkspace() {
       setLoadState('idle');
       setLoadError(null);
       setMigrationNotice(false);
+      setSavedSnapshot(snapshotOf('Minha História Interativa', 'public', initialNodes, initialEdges));
       return () => {
         cancelled = true;
       };
@@ -147,12 +202,20 @@ export default function EditorWorkspace() {
           (graph.nodes ?? []) as unknown as Node[],
           (graph.edges ?? []) as unknown as Edge[]
         );
+        const loadedEdges = withChoiceEdgeType(normalized.edges);
+        const loadedVisibility = graph.visibility ?? 'public';
         setNodes(normalized.nodes);
-        setEdges(withChoiceEdgeType(normalized.edges));
+        setEdges(loadedEdges);
         setMigrationNotice(normalized.changed);
         setProjectName(graph.name);
         setSourceGraph(graph);
-        setVisibility(graph.visibility ?? 'public');
+        setVisibility(loadedVisibility);
+        // Projeto migrado conta como alterado: precisa ser salvo no formato novo.
+        setSavedSnapshot(
+          normalized.changed
+            ? ''
+            : snapshotOf(graph.name, loadedVisibility, normalized.nodes, loadedEdges)
+        );
         if (graph.shareToken) {
           setShareToken(graph.shareToken);
           setShareUrl(`${PLAYER_URL.replace(/\/$/, '')}/play/${graph.shareToken}`);
@@ -223,11 +286,20 @@ export default function EditorWorkspace() {
 
   const handleDeleteNode = useCallback(
     (nodeId: string) => {
+      const label = String(nodes.find((n) => n.id === nodeId)?.data.label ?? 'sem nome');
+      if (!confirmDeleteScenes([label])) return;
       setNodes((nds) => nds.filter((node) => node.id !== nodeId));
       setEdges((eds) => eds.filter((edge) => edge.source !== nodeId && edge.target !== nodeId));
       setSelectedNode(null);
     },
-    [setNodes, setEdges]
+    [nodes, setNodes, setEdges]
+  );
+
+  // Tecla Delete/Backspace no canvas também pede confirmação para cenas.
+  const onBeforeDelete = useCallback(
+    async ({ nodes: toDelete }: { nodes: Node[]; edges: Edge[] }) =>
+      confirmDeleteScenes(toDelete.map((n) => String(n.data.label ?? 'sem nome'))),
+    []
   );
 
   const handleDeleteEdge = useCallback(
@@ -288,6 +360,8 @@ export default function EditorWorkspace() {
       const result = await api.saveProject(graph);
       const saved = result.project;
       setSourceGraph(saved);
+      setSavedSnapshot(snapshotOf(projectName, visibility, nodes, edges));
+      isDirtyRef.current = false;
       if (saved.shareToken) {
         setShareToken(saved.shareToken);
         const url = result.shareUrl ?? `${PLAYER_URL.replace(/\/$/, '')}/play/${saved.shareToken}`;
@@ -302,11 +376,11 @@ export default function EditorWorkspace() {
         navigate(`/editor/${encodeURIComponent(saved.id)}`, { replace: true });
       }
       setMigrationNotice(false);
-      setSaveFeedback('✓ Projeto salvo');
+      setSaveFeedback('Projeto salvo');
       setTimeout(() => setSaveFeedback(null), 2500);
     } catch (error) {
       const apiMessage = (error as { response?: { data?: { error?: string } } })?.response?.data?.error;
-      alert(`❌ Erro ao salvar projeto.\n\n${apiMessage ?? 'Verifique se a API está rodando.'}`);
+      alert(`Não foi possível salvar o projeto.\n\n${apiMessage ?? 'Verifique se a API está rodando.'}`);
     } finally {
       setIsSaving(false);
     }
@@ -354,6 +428,8 @@ export default function EditorWorkspace() {
         onNodeClick={onNodeClick}
         onEdgeClick={onEdgeClick}
         onPaneClick={onPaneClick}
+        onBeforeDelete={onBeforeDelete}
+        deleteKeyCode={['Backspace', 'Delete']}
         nodeTypes={nodeTypes}
         fitView
       >
@@ -375,7 +451,7 @@ export default function EditorWorkspace() {
                   : 'text-text-secondary hover:bg-surface-hover'
               }`}
             >
-              📝 Projeto
+              <IconFileDescription size={16} stroke={1.75} className="inline -mt-0.5 mr-1.5" aria-hidden="true" />Projeto
             </button>
             <button
               type="button"
@@ -386,7 +462,7 @@ export default function EditorWorkspace() {
                   : 'text-text-secondary hover:bg-surface-hover'
               }`}
             >
-              🔍 Validação
+              <IconListCheck size={16} stroke={1.75} className="inline -mt-0.5 mr-1.5" aria-hidden="true" />Validação
             </button>
           </div>
 
@@ -414,7 +490,7 @@ export default function EditorWorkspace() {
                   </button>
                 </div>
 
-                <h2 className="text-xl font-semibold text-text mb-4">🎬 Editor de Narrativa</h2>
+                <h2 className="text-xl font-semibold text-text mb-4">Editor de aula</h2>
 
                 {projectList.length > 0 && (
                   <div className="mb-4">
@@ -439,7 +515,7 @@ export default function EditorWorkspace() {
                 )}
 
                 <div className="mb-4">
-                  <label className="field-label">📝 Nome do Projeto</label>
+                  <label className="field-label">Nome do projeto</label>
                   <input
                     type="text"
                     value={projectName}
@@ -532,8 +608,20 @@ export default function EditorWorkspace() {
                   title={saveBlocked ? blockingReason : undefined}
                   className="btn-primary w-full"
                 >
-                  {isSaving ? '⏳ Salvando...' : saveFeedback ?? '💾 Salvar Projeto'}
+                  <span className="inline-flex items-center justify-center gap-2">
+                    {isSaving ? (
+                      <IconLoader2 size={18} stroke={2} className="animate-spin" aria-hidden="true" />
+                    ) : saveFeedback ? (
+                      <IconCheck size={18} stroke={2} aria-hidden="true" />
+                    ) : (
+                      <IconDeviceFloppy size={18} stroke={1.75} aria-hidden="true" />
+                    )}
+                    {isSaving ? 'Salvando…' : saveFeedback ?? 'Salvar Projeto'}
+                  </span>
                 </button>
+                {isDirty && !saveBlocked && !isSaving && (
+                  <p className="text-xs text-copper-light mt-2">• Alterações não salvas</p>
+                )}
                 {saveBlocked && blockingReason && (
                   <p className="text-xs text-danger-soft mt-2">{blockingReason}</p>
                 )}

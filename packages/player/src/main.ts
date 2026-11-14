@@ -10,6 +10,7 @@ import { hlsService } from './services/hls.service';
 import { preloadService } from './services/preload.service';
 import { timelineService } from './services/timeline.service';
 import { normalizeGraph } from '@ine/shared';
+import { setupChoiceShortcuts } from './controllers/choices.controller';
 
 type ViewState = 'landing' | 'loading' | 'error' | 'notice' | 'playing';
 
@@ -62,7 +63,7 @@ async function startProject(graph: Awaited<ReturnType<typeof apiService.getProje
 
   const initialNode = findInitialNode(state.currentGraph);
   if (!initialNode) {
-    showView('error', 'Nenhum nó inicial encontrado nesta narrativa.');
+    showView('error', 'Esta aula não tem uma cena inicial.');
     return;
   }
 
@@ -87,7 +88,7 @@ async function loadProjectByShareToken(token: string): Promise<void> {
       'error',
       is404
         ? 'Link inválido ou projeto não encontrado.'
-        : 'Não foi possível carregar a narrativa. Tente novamente mais tarde.'
+        : 'Não foi possível carregar a aula. Tente novamente mais tarde.'
     );
   }
 }
@@ -113,6 +114,7 @@ async function init() {
   dom.backToHomeBtn.addEventListener('click', handleBackToHome);
 
   setupCustomControls();
+  setupChoiceShortcuts();
   startProgressLoop();
   hlsService.init();
 

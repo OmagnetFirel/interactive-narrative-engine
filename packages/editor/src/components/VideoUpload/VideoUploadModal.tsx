@@ -2,6 +2,7 @@ import { useState, useRef } from 'react';
 import { createPortal } from 'react-dom';
 import { uploadVideo, processVideo, waitForProcessing, type VideoStatus } from '../../services/videoApi';
 import { MEDIA_URL } from '../../services/api';
+import { IconAlertTriangle, IconCloudUpload, IconLoader2, IconUpload, IconVideo, IconX } from '@tabler/icons-react';
 
 export interface UploadedVideoInfo {
   hlsUrl: string;
@@ -122,15 +123,17 @@ export function VideoUploadModal({ isOpen, onClose, onVideoReady }: VideoUploadM
       <div className="bg-surface border border-border rounded-[20px] shadow-soft w-full max-w-lg mx-4">
         {/* Header */}
         <div className="px-6 py-4 border-b border-border flex items-center justify-between">
-          <h2 className="text-xl font-semibold text-text">
-            📹 Upload de Vídeo
+          <h2 className="text-xl font-semibold text-text flex items-center gap-2">
+            <IconVideo size={22} stroke={1.75} className="text-copper" aria-hidden="true" />
+            Enviar vídeo
           </h2>
           <button
             onClick={handleClose}
             disabled={isUploading || isProcessing}
             className="text-text-secondary hover:text-text transition-colors disabled:opacity-50"
+            aria-label="Fechar"
           >
-            ✕
+            <IconX size={20} stroke={1.75} aria-hidden="true" />
           </button>
         </div>
 
@@ -142,7 +145,7 @@ export function VideoUploadModal({ isOpen, onClose, onVideoReady }: VideoUploadM
               onClick={() => fileInputRef.current?.click()}
               className="border-2 border-dashed border-border rounded-lg p-8 text-center cursor-pointer hover:border-copper hover:bg-copper/5 transition-all"
             >
-              <div className="text-4xl mb-3">🎬</div>
+              <IconCloudUpload size={40} stroke={1.5} className="mx-auto mb-3 text-copper" aria-hidden="true" />
               <div className="text-sm font-medium text-text mb-1">
                 Clique para selecionar um vídeo
               </div>
@@ -168,8 +171,9 @@ export function VideoUploadModal({ isOpen, onClose, onVideoReady }: VideoUploadM
                   <button
                     onClick={() => setFile(null)}
                     className="text-text-secondary hover:text-text ml-2"
+                    aria-label="Remover arquivo"
                   >
-                    ✕
+                    <IconX size={16} stroke={1.75} aria-hidden="true" />
                   </button>
                 )}
               </div>
@@ -196,7 +200,7 @@ export function VideoUploadModal({ isOpen, onClose, onVideoReady }: VideoUploadM
           {isProcessing && (
             <div className="space-y-3">
               <div className="flex items-center gap-3 p-4 bg-primary/5 border border-primary/20 rounded-lg">
-                <div className="animate-spin text-2xl">⚙️</div>
+                <IconLoader2 size={26} stroke={1.75} className="animate-spin text-copper shrink-0" aria-hidden="true" />
                 <div className="flex-1">
                   <div className="text-sm font-medium text-text">
                     Processando HLS
@@ -216,7 +220,7 @@ export function VideoUploadModal({ isOpen, onClose, onVideoReady }: VideoUploadM
           {error && (
             <div className="p-4 bg-danger/10 border border-danger/30 rounded-lg">
               <div className="flex items-start gap-2">
-                <span className="text-danger">⚠️</span>
+                <IconAlertTriangle size={18} stroke={1.75} className="text-danger shrink-0" aria-hidden="true" />
                 <div className="flex-1 text-sm text-danger">
                   {error}
                 </div>
@@ -247,10 +251,14 @@ export function VideoUploadModal({ isOpen, onClose, onVideoReady }: VideoUploadM
             disabled={!file || isUploading || isProcessing}
             className="btn-primary disabled:opacity-50 disabled:cursor-not-allowed"
           >
-            {isUploading && '⏳'}
-            {isProcessing && '⚙️'}
-            {!isUploading && !isProcessing && '🚀'}
-            {isUploading ? 'Enviando...' : isProcessing ? 'Processando...' : 'Enviar e Processar'}
+            <span className="inline-flex items-center gap-2">
+              {isUploading || isProcessing ? (
+                <IconLoader2 size={17} stroke={2} className="animate-spin" aria-hidden="true" />
+              ) : (
+                <IconUpload size={17} stroke={1.75} aria-hidden="true" />
+              )}
+              {isUploading ? 'Enviando…' : isProcessing ? 'Processando…' : 'Enviar e processar'}
+            </span>
           </button>
         </div>
       </div>

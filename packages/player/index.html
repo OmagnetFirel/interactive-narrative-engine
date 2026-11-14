@@ -3,33 +3,37 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>Interactive Narrative Player</title>
+    <title>BranchPlay</title>
+    <link rel="icon" href="/favicon.ico" sizes="48x48" />
+    <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
+    <link rel="apple-touch-icon" href="/apple-touch-icon.png" />
+    <meta name="theme-color" content="#3a2418" />
   </head>
   <body>
     <div id="app">
       <!-- Landing: sem link de compartilhamento -->
       <div id="landing-panel" class="panel">
-        <h2>Interactive Narrative Player</h2>
+        <h2>BranchPlay</h2>
         <p id="landing-message" class="landing-text">
-          Acesse esta narrativa pelo link de compartilhamento enviado pelo autor.
+          Acesse a aula pelo link de compartilhamento enviado pelo professor.
         </p>
       </div>
 
       <!-- Carregando projeto via share token -->
       <div id="loading-panel" class="panel" style="display: none;">
-        <h2>Carregando narrativa…</h2>
+        <h2>Carregando aula…</h2>
         <p class="landing-text">Aguarde um momento.</p>
       </div>
 
       <!-- Erro ao resolver share token -->
       <div id="error-panel" class="panel panel-error" style="display: none;">
-        <h2>Narrativa indisponível</h2>
+        <h2>Aula indisponível</h2>
         <p id="error-message" class="landing-text">Link inválido ou projeto não encontrado.</p>
       </div>
 
       <!-- Aviso antes de iniciar a aula -->
       <div id="notice-panel" class="panel panel-notice" style="display: none;" role="dialog" aria-modal="true" aria-labelledby="notice-title">
-        <div class="notice-icon" aria-hidden="true">🤖</div>
+        <div class="notice-icon" aria-hidden="true"><!-- Tabler Icons (MIT): sparkles --><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M16 18a2 2 0 0 1 2 2a2 2 0 0 1 2 -2a2 2 0 0 1 -2 -2a2 2 0 0 1 -2 2m0 -12a2 2 0 0 1 2 2a2 2 0 0 1 2 -2a2 2 0 0 1 -2 -2a2 2 0 0 1 -2 2m-7 12a6 6 0 0 1 6 -6a6 6 0 0 1 -6 -6a6 6 0 0 1 -6 6a6 6 0 0 1 6 6" /></svg></div>
         <h2 id="notice-title">Antes de começar</h2>
         <p class="landing-text">
           Os vídeos desta aula foram <strong>gerados por inteligência artificial</strong> e servem apenas como exemplo.
@@ -70,7 +74,7 @@
               <div id="end-icon"></div>
               <h2 id="end-title">Fim da História</h2>
               <p id="end-message"></p>
-              <button id="restart-button">🔄 Recomeçar</button>
+              <button id="restart-button"><!-- Tabler Icons (MIT): rotate-clockwise --><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4.05 11a8 8 0 1 1 .5 4m-.5 5v-5h5" /></svg><span>Recomeçar</span></button>
             </div>
           </div>
 

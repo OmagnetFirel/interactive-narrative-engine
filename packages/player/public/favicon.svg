@@ -1,0 +1,8 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64">
+  <title>BranchPlay</title>
+  <rect width="64" height="64" rx="14" fill="#3a2418"/>
+  <path d="M15 17 L33 32 L15 47 Z" fill="#d99a5b" stroke="#d99a5b" stroke-width="2" stroke-linejoin="round"/>
+  <path d="M33 32 L44 21 M33 32 L44 43" stroke="#d99a5b" stroke-width="5" stroke-linecap="round" fill="none"/>
+  <circle cx="47" cy="19" r="5" fill="#faf8f4"/>
+  <circle cx="47" cy="45" r="5" fill="#faf8f4"/>
+</svg>

@@ -35,8 +35,8 @@ export default function LoginPage() {
                 <div className="flex items-center gap-3 mb-6">
                     <span className="h-10 w-10 rounded-lg bg-copper shrink-0" />
                     <div>
-                        <h1 className="text-xl font-semibold">Editor INE</h1>
-                        <p className="text-sm text-text-secondary">Entre na sua conta</p>
+                        <h1 className="text-xl font-semibold">BranchPlay</h1>
+                        <p className="text-sm text-text-secondary">Editor de aulas · entre na sua conta</p>
                     </div>
                 </div>
 

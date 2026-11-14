@@ -1,11 +1,12 @@
 import type { GraphNode } from '../core/types';
 import { state } from '../core/state';
 import { dom } from './dom-elements';
+import { ICONS } from './icons';
 
 export function showEndOverlay(node: GraphNode): void {
     const data = node.data as { endMessage?: string; description?: string };
 
-    dom.endIcon.textContent = '🏁';
+    dom.endIcon.innerHTML = ICONS.flag;
     dom.endTitle.textContent = 'Fim da aula';
     dom.endMessage.textContent = data.endMessage || 'Obrigado por assistir!';
 
@@ -18,7 +19,7 @@ export function hideEnd(): void {
 
 /** Vídeo pausado esperando o aluno: mostra o título e para a barra de tempo. */
 export function showWaitingForChoice(): void {
-    dom.choicesTitle.textContent = 'Escolha uma opção para continuar';
+    dom.choicesTitle.innerHTML = `<span class="choices-title-icon">${ICONS.playerPause}</span><span>Escolha uma opção para continuar</span>`;
     dom.choicesTitle.classList.add('visible');
     dom.timeoutBar.classList.add('hidden');
 }
